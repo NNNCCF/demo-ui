@@ -138,8 +138,8 @@ export const serviceOrderApi = {
   updateStatus: (id: number, status: string) => patch<void>(`/service-orders/${id}/status`, { status }),
   dispatch: (id: number, nurseId: number, nurseName: string) =>
     patch<void>(`/service-orders/${id}/dispatch`, { nurseId, nurseName }),
-  listNurses: (orgId: number) =>
-    get<NurseItem[]>('/service-orders/nurses', { params: { orgId } }),
+  listNurses: (orgId?: number | null) =>
+    get<NurseItem[]>('/service-orders/nurses', { params: orgId ? { orgId } : {} }),
 }
 
 export const logApi = {

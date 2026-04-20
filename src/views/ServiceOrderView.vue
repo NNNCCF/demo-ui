@@ -53,8 +53,7 @@ async function loadTargets() {
 }
 
 async function loadNurses() {
-  if (!orgId.value) return
-  nurses.value = await serviceOrderApi.listNurses(orgId.value as number).catch(() => [])
+  nurses.value = await serviceOrderApi.listNurses(orgId.value ?? undefined).catch(() => [])
 }
 
 function renderCharts() {
