@@ -1,14 +1,18 @@
-# -------- Stage 1: Build SPA --------
+﻿# -------- Stage 1: Build SPA --------
 FROM node:20-alpine AS build
 WORKDIR /app
 
-# 依赖层缓存
+ENV CI=true
+ENV NODE_OPTIONS=--max-old-space-size=2048
+
+# Install dependencies first for better layer reuse.
 COPY package.json package-lock.json ./
 RUN npm ci --no-audit --no-fund
 
-# 构建
+# Copy app source and build in two steps so failures are easier to locate.
 COPY . .
-RUN npm run build
+RUN npx vue-tsc -b
+RUN npx vite build
 
 # -------- Stage 2: nginx Serve + Reverse Proxy --------
 FROM nginx:1.27-alpine
@@ -17,7 +21,7 @@ COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/dist /usr/share/nginx/html
 
 EXPOSE 80
-# HTTPS 预留：启用时打开 compose 443 端口映射并编辑 nginx.conf
+# Reserved for optional HTTPS exposure.
 EXPOSE 443
 
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \

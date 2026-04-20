@@ -59,6 +59,12 @@ const router = createRouter({
           meta: { roles: ['ADMIN', 'GUARDIAN'] as UserRole[] },
         },
         {
+          path: '/feedbacks',
+          name: 'feedbacks',
+          component: () => import('@/views/FeedbackView.vue'),
+          meta: { roles: ['ADMIN'] as UserRole[] },
+        },
+        {
           path: '/users',
           name: 'users',
           component: () => import('@/views/ClientUserView.vue'),

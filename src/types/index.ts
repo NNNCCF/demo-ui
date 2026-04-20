@@ -185,3 +185,14 @@ export interface ClientUser {
   chronicDisease?: string
   remark?: string
 }
+
+export interface FeedbackItem {
+  id: number
+  submitterId?: number
+  submitterRole?: string
+  submitterName?: string
+  type: string
+  content: string
+  status: string
+  createdAt: string
+}

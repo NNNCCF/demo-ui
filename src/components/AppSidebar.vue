@@ -2,16 +2,17 @@
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
+  Bell,
+  ChatDotRound,
   FirstAidKit,
-  Headset,
   Monitor,
   Place,
-  User,
   Promotion,
   Setting,
   Tickets,
   House,
   OfficeBuilding,
+  User,
 } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import logoImage from '@/image/main-left-top-image.png'
@@ -23,10 +24,11 @@ const authStore = useAuthStore()
 const menuList = [
   { name: '首页地图', path: '/dashboard', icon: Place },
   { name: '设备列表', path: '/devices', icon: Monitor },
-  { name: '报警记录', path: '/alarms', icon: Headset },
+  { name: '告警记录', path: '/alarms', icon: Bell },
   { name: '医护绑定', path: '/caregiver', icon: FirstAidKit },
   { name: '预约订单', path: '/service-orders', icon: Tickets },
   { name: '用户管理', path: '/users', icon: User },
+  { name: '意见反馈', path: '/feedbacks', icon: ChatDotRound },
   { name: '动态发布', path: '/news', icon: Promotion },
   { name: '家庭管理', path: '/families', icon: House },
   { name: '机构管理', path: '/organizations', icon: OfficeBuilding },
@@ -36,12 +38,11 @@ const menuList = [
 const visibleMenus = computed(() => {
   const role = authStore.userInfo?.role
   const orgType = authStore.userInfo?.orgType
+
   return menuList.filter((item) => {
-    // 机构管理、系统管理：仅 ADMIN 可见
     if (item.path === '/system' && role !== 'ADMIN') return false
     if (item.path === '/organizations' && role !== 'ADMIN') return false
-    // 社区账号：隐藏机构管理、系统管理（已由上面处理）
-    // 医疗机构账号：额外隐藏医护绑定
+    if (item.path === '/feedbacks' && role !== 'ADMIN') return false
     if (item.path === '/caregiver' && orgType === 'MEDICAL_INSTITUTION') return false
     return true
   })
@@ -134,7 +135,7 @@ function handleSelect(path: string) {
 }
 
 :deep(.el-menu-item.is-active) {
-  background: #2563eb; /* Active blue */
+  background: #2563eb;
   color: #fff;
   position: relative;
 }

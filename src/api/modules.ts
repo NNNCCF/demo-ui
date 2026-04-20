@@ -12,6 +12,7 @@ import type {
   Device,
   DeviceLog,
   DeviceType,
+  FeedbackItem,
   HeartRateTrendPoint,
   LoginPayload,
   LoginResult,
@@ -224,6 +225,17 @@ export const adminApi = {
       headers: authStore.token ? { Authorization: `Bearer ${authStore.token}` } : {},
     }).then(r => r.data.data)
   },
+}
+
+export const feedbackAdminApi = {
+  list: (params?: {
+    status?: string
+    type?: string
+    submitterRole?: string
+    keyword?: string
+  }) => get<FeedbackItem[]>('/admin/feedbacks', { params }),
+  updateStatus: (id: number, status: string) =>
+    patch<void>(`/admin/feedbacks/${id}/status`, { status }),
 }
 
 export const newsApi = {
