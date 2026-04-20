@@ -62,7 +62,6 @@ export interface Device {
   address?: string
   roomNumber?: string
   homeLocation?: string
-  bindStatus?: boolean
   bindTime?: string
   targetName?: string
   guardian?: {
