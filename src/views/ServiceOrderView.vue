@@ -34,11 +34,13 @@ const filtered = computed(() =>
   list.value.filter((item) => tab.value === 'ALL' || item.status === tab.value),
 )
 
+const orgId = computed(() => auth.userInfo?.orgId ?? null)
+
 async function loadOrders() {
   loading.value = true
   try {
     const params: { orgId?: number } = {}
-    if (auth.orgId) params.orgId = auth.orgId
+    if (orgId.value) params.orgId = orgId.value
     list.value = await serviceOrderApi.list(params)
   } finally {
     loading.value = false
@@ -51,8 +53,8 @@ async function loadTargets() {
 }
 
 async function loadNurses() {
-  if (!auth.orgId) return
-  nurses.value = await serviceOrderApi.listNurses(auth.orgId).catch(() => [])
+  if (!orgId.value) return
+  nurses.value = await serviceOrderApi.listNurses(orgId.value as number).catch(() => [])
 }
 
 function renderCharts() {

@@ -135,7 +135,7 @@ async function loadSummary() {
   summary.value.alarmBreathRate = alarms.filter((a) => a.alarmType === 'BREATH_RATE').length
   summary.value.alarmDeviceOffline = alarms.filter((a) => a.alarmType === 'DEVICE_OFFLINE').length
   summary.value.alarmUnhandled = alarms.filter((a) => a.handleStatus === 'UNHANDLED').length
-  const orders = await serviceOrderApi.list(userId ?? 0).catch(() => [])
+  const orders = await serviceOrderApi.list({ targetId: userId ?? undefined }).catch(() => [])
   summary.value.pendingOrders = orders.filter((order) => order.status === 'PENDING').length
   summary.value.completedOrders = orders.filter((order) => order.status === 'COMPLETED').length
 }
