@@ -140,8 +140,10 @@ export interface ServiceOrder {
   familyId?: number
   memberId?: number
   guardianId?: number
+  orgId?: number
   nurseId?: number
   nurseName?: string
+  nursePhone?: string
   requirement?: string
   dispatchedBy?: string
   visitTime?: string
@@ -149,6 +151,17 @@ export interface ServiceOrder {
   payAmount?: string
   payStatus?: string
   createdAt?: string
+  // 结构化订单字段
+  contactName?: string
+  contactPhone?: string
+  serviceAddress?: string
+  medicineList?: string
+}
+
+export interface NurseItem {
+  id: number
+  name: string
+  phone: string
 }
 
 export type ClientUserRole = 'GUARDIAN' | 'WARD' | 'CAREGIVER' | 'INSTITUTION'

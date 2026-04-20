@@ -19,6 +19,7 @@ import type {
   MonthlyDeviceStat,
   NewsPost,
   RegisterPayload,
+  NurseItem,
   ServiceOrder,
   ServiceOrderType,
   UserProfile,
@@ -130,19 +131,15 @@ export const statsApi = {
 // Note: /stats/* is accessible to ADMIN and GUARDIAN roles
 
 export const serviceOrderApi = {
-  list: (paramsOrTargetId: number | {
-    targetId?: number
-    status?: string
-    orderType?: ServiceOrderType
-    startTime?: string
-    endTime?: string
-  }) => {
-    const params = typeof paramsOrTargetId === 'number' ? { targetId: paramsOrTargetId } : paramsOrTargetId
-    return get<ServiceOrder[]>('/service-orders', { params })
-  },
+  list: (params: { targetId?: number; orgId?: number; status?: string; orderType?: ServiceOrderType }) =>
+    get<ServiceOrder[]>('/service-orders', { params }),
   create: (payload: { orderType: ServiceOrderType; targetId: number; appointmentTime: string }) =>
     post<ServiceOrder>('/service-orders', payload),
   updateStatus: (id: number, status: string) => patch<void>(`/service-orders/${id}/status`, { status }),
+  dispatch: (id: number, nurseId: number, nurseName: string) =>
+    patch<void>(`/service-orders/${id}/dispatch`, { nurseId, nurseName }),
+  listNurses: (orgId: number) =>
+    get<NurseItem[]>('/service-orders/nurses', { params: { orgId } }),
 }
 
 export const logApi = {
