@@ -1,5 +1,6 @@
 ﻿# -------- Stage 1: Build SPA --------
-FROM node:20-alpine AS build
+ARG FRONTEND_BUILD_IMAGE=node:20-alpine
+FROM ${FRONTEND_BUILD_IMAGE} AS build
 WORKDIR /app
 
 ENV CI=true
@@ -15,7 +16,8 @@ RUN npx vue-tsc -b
 RUN npx vite build
 
 # -------- Stage 2: nginx Serve + Reverse Proxy --------
-FROM nginx:1.27-alpine
+ARG FRONTEND_RUNTIME_IMAGE=nginx:1.27-alpine
+FROM ${FRONTEND_RUNTIME_IMAGE}
 RUN rm /etc/nginx/conf.d/default.conf
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/dist /usr/share/nginx/html
