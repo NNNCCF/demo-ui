@@ -175,17 +175,19 @@ onMounted(loadOrgs)
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="360">
+        <el-table-column label="操作" width="460">
           <template #default="{ row }">
-            <el-button size="small" @click="openEdit(row)">编辑</el-button>
-            <el-button size="small" type="primary" @click="openCreateAdmin(row)">添加管理员</el-button>
-            <el-button size="small" type="success" @click="openAssignCaregiver(row)">添加医护</el-button>
-            <el-button size="small" type="info" @click="toggleExpand(row.id)">
-              {{ expandedOrgId === row.id ? '收起' : '查看人员' }}
-            </el-button>
-            <el-button size="small" :type="row.status === 'ENABLED' ? 'danger' : 'success'" @click="toggleStatus(row)">
-              {{ row.status === 'ENABLED' ? '禁用' : '启用' }}
-            </el-button>
+            <div class="action-row nowrap">
+              <el-button size="small" @click="openEdit(row)">编辑</el-button>
+              <el-button size="small" type="primary" @click="openCreateAdmin(row)">添加管理员</el-button>
+              <el-button size="small" type="success" @click="openAssignCaregiver(row)">添加医护</el-button>
+              <el-button size="small" type="info" @click="toggleExpand(row.id)">
+                {{ expandedOrgId === row.id ? '收起' : '查看人员' }}
+              </el-button>
+              <el-button size="small" :type="row.status === 'ENABLED' ? 'danger' : 'success'" @click="toggleStatus(row)">
+                {{ row.status === 'ENABLED' ? '禁用' : '启用' }}
+              </el-button>
+            </div>
           </template>
         </el-table-column>
       </el-table>
@@ -366,6 +368,17 @@ onMounted(loadOrgs)
 .staff-count { font-size: 13px; color: #6b7280; }
 
 .sub-table { border-radius: 6px; overflow: hidden; }
+
+.action-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.action-row.nowrap {
+  flex-wrap: nowrap;
+  white-space: nowrap;
+}
 
 /* 护工卡片 */
 .caregiver-row {

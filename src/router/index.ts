@@ -12,6 +12,12 @@ const router = createRouter({
       meta: { public: true },
     },
     {
+      path: '/change-password',
+      name: 'change-password',
+      component: () => import('@/views/ChangePasswordView.vue'),
+      meta: { roles: ['ADMIN', 'GUARDIAN'] as UserRole[] },
+    },
+    {
       path: '/',
       component: () => import('@/layouts/MainLayout.vue'),
       redirect: '/dashboard',
@@ -100,11 +106,29 @@ const router = createRouter({
 router.beforeEach((to, _from, next) => {
   const authStore = useAuthStore()
   if (to.meta.public) {
+    if (authStore.isAuthenticated) {
+      if (authStore.userInfo?.forcePasswordChange) {
+        next('/change-password')
+        return
+      }
+      if (to.path === '/login') {
+        next('/dashboard')
+        return
+      }
+    }
     next()
     return
   }
   if (!authStore.isAuthenticated) {
     next('/login')
+    return
+  }
+  if (authStore.userInfo?.forcePasswordChange && to.path !== '/change-password') {
+    next('/change-password')
+    return
+  }
+  if (!authStore.userInfo?.forcePasswordChange && to.path === '/change-password') {
+    next('/dashboard')
     return
   }
   const routeRoles = (to.meta.roles as UserRole[] | undefined) || []

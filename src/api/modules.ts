@@ -13,6 +13,7 @@ import type {
   DeviceLog,
   DeviceProvisioningResult,
   DeviceType,
+  AuthCaptcha,
   FeedbackItem,
   HeartRateTrendPoint,
   LoginPayload,
@@ -29,14 +30,10 @@ import type {
 export const authApi = {
   login: (payload: LoginPayload) => post<LoginResult>('/login', payload),
   register: (payload: RegisterPayload) => post<UserProfile>('/register', payload),
-  captcha: (width = 150, height = 50) =>
-    axios.get<{ code: number; msg: string; data: { id: string; url: string } }>(
-      `https://v2.xxapi.cn/api/captcha?width=${width}&height=${height}&length=4&type=string`,
-    ).then((res) => res.data),
-  verifyCaptcha: (id: string, key: string) =>
-    axios.get<{ code: number; msg: string; data: string }>(
-      `https://v2.xxapi.cn/api/captcha?id=${id}&key=${key}&type=string`,
-    ).then((res) => res.data),
+  getCaptcha: (scene: 'LOGIN' | 'REGISTER') =>
+    get<AuthCaptcha>('/auth/captcha', { params: { scene } }),
+  changePassword: (payload: { oldPassword: string; newPassword: string }) =>
+    post<void>('/account/change-password', payload),
 }
 
 export const deviceApi = {
@@ -137,10 +134,62 @@ export const statsApi = {
 // Note: /stats/* is accessible to ADMIN and GUARDIAN roles
 
 export const serviceOrderApi = {
-  list: (params: { targetId?: number; orgId?: number; status?: string; orderType?: ServiceOrderType }) =>
+  list: (params: { targetId?: number; orgId?: number; status?: string; orderType?: ServiceOrderType; keyword?: string }) =>
     get<ServiceOrder[]>('/service-orders', { params }),
-  create: (payload: { orderType: ServiceOrderType; targetId: number; appointmentTime: string }) =>
-    post<ServiceOrder>('/service-orders', payload),
+  detail: (id: number) => get<ServiceOrder>(`/service-orders/${id}`),
+  create: (payload: {
+    orderType: ServiceOrderType
+    targetId: number
+    appointmentTime: string
+    status?: string
+    orgId?: number
+    familyId?: number
+    memberId?: number
+    guardianId?: number
+    createdById?: number
+    nurseId?: number
+    nurseName?: string
+    nursePhone?: string
+    displayType?: string
+    contactName?: string
+    contactPhone?: string
+    serviceAddress?: string
+    medicineList?: string
+    requirement?: string
+    acceptTime?: string
+    dispatchedBy?: string
+    visitTime?: string
+    payAmount?: string
+    payStatus?: string
+    visitRemark?: string
+  }) => post<ServiceOrder>('/service-orders', payload),
+  update: (id: number, payload: {
+    orderType: ServiceOrderType
+    targetId: number
+    appointmentTime: string
+    status?: string
+    orgId?: number
+    familyId?: number
+    memberId?: number
+    guardianId?: number
+    createdById?: number
+    nurseId?: number
+    nurseName?: string
+    nursePhone?: string
+    displayType?: string
+    contactName?: string
+    contactPhone?: string
+    serviceAddress?: string
+    medicineList?: string
+    requirement?: string
+    acceptTime?: string
+    dispatchedBy?: string
+    visitTime?: string
+    payAmount?: string
+    payStatus?: string
+    visitRemark?: string
+  }) => put<ServiceOrder>(`/service-orders/${id}`, payload),
+  delete: (id: number) => del<void>(`/service-orders/${id}`),
   updateStatus: (id: number, status: string) => patch<void>(`/service-orders/${id}/status`, { status }),
   dispatch: (id: number, nurseId: number, nurseName: string) =>
     patch<void>(`/service-orders/${id}/dispatch`, { nurseId, nurseName }),
@@ -203,7 +252,6 @@ export const clientUserApi = {
 export const adminApi = {
   users: () => get<UserProfile[]>('/admin/users'),
   createUser: (payload: {
-    userId: number
     username: string
     password: string
     role: 'ADMIN' | 'GUARDIAN'
@@ -212,7 +260,7 @@ export const adminApi = {
     orgId?: number
   }) => post<UserProfile>('/admin/users', payload),
   updateUserStatus: (payload: { userId: number; status: 'ENABLED' | 'DISABLED' }) =>
-    patch<void>('/admin/users/status', payload),
+    patch<void>(`/admin/users/${payload.userId}/status`, { status: payload.status }),
   resetPassword: (userId: number, newPassword: string) =>
     patch<void>(`/admin/users/${userId}/reset-password`, { newPassword }),
   commandLogs: (startTime: string, endTime: string) =>
@@ -237,6 +285,22 @@ export const feedbackAdminApi = {
     submitterRole?: string
     keyword?: string
   }) => get<FeedbackItem[]>('/admin/feedbacks', { params }),
+  detail: (id: number) => get<FeedbackItem>(`/admin/feedbacks/${id}`),
+  create: (payload: {
+    submitterId?: number
+    submitterRole?: string
+    type: string
+    content: string
+    status?: string
+  }) => post<FeedbackItem>('/admin/feedbacks', payload),
+  update: (id: number, payload: {
+    submitterId?: number
+    submitterRole?: string
+    type: string
+    content: string
+    status?: string
+  }) => put<FeedbackItem>(`/admin/feedbacks/${id}`, payload),
+  delete: (id: number) => del<void>(`/admin/feedbacks/${id}`),
   updateStatus: (id: number, status: string) =>
     patch<void>(`/admin/feedbacks/${id}/status`, { status }),
 }

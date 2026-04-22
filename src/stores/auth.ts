@@ -8,6 +8,7 @@ interface UserInfo {
   username?: string
   orgId?: number | null
   orgType?: string | null
+  forcePasswordChange?: boolean
 }
 
 const TOKEN_KEY = 'health_iot_token'
@@ -34,11 +35,17 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.removeItem(USER_KEY)
   }
 
+  function updateUserInfo(nextUserInfo: UserInfo) {
+    userInfo.value = nextUserInfo
+    localStorage.setItem(USER_KEY, JSON.stringify(nextUserInfo))
+  }
+
   return {
     token,
     userInfo,
     isAuthenticated,
     setAuth,
+    updateUserInfo,
     logout,
   }
 })

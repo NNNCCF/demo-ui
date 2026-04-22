@@ -23,7 +23,6 @@ const users = ref<UserRow[]>([])
 
 const addUserVisible = ref(false)
 const userForm = reactive({
-  userId: '',
   username: '',
   password: '',
   role: 'GUARDIAN' as UserRole,
@@ -92,22 +91,23 @@ const logs = ref<{ id: number; deviceId?: string; commandBody: string; sentAt: s
 
 
 async function saveUser() {
-  const userId = Number(userForm.userId)
-  if (!Number.isFinite(userId)) {
-    ElMessage.error('用户ID格式错误')
+  if (!userForm.username.trim()) {
+    ElMessage.error('请输入用户名')
+    return
+  }
+  if (userForm.password.length < 6) {
+    ElMessage.error('初始密码至少 6 位')
     return
   }
   await adminApi.createUser({
-    userId,
-    username: userForm.username,
+    username: userForm.username.trim(),
     password: userForm.password,
     role: userForm.role,
-    region: userForm.region,
-    phone: userForm.phone,
+    region: userForm.region.trim() || undefined,
+    phone: userForm.phone.trim() || undefined,
     orgId: userForm.orgId || undefined,
   })
   addUserVisible.value = false
-  userForm.userId = ''
   userForm.username = ''
   userForm.password = ''
   userForm.role = 'GUARDIAN'
@@ -446,9 +446,13 @@ onUnmounted(() => {
 
   <el-dialog v-model="addUserVisible" title="新增用户" width="500px">
     <el-form :model="userForm" label-width="100px">
-      <el-form-item label="用户ID">
-        <el-input v-model="userForm.userId" placeholder="1002" />
-      </el-form-item>
+      <el-alert
+        title="新建账号后将强制首次登录修改密码，首个 ADMIN 账号由系统初始化提供。"
+        type="info"
+        :closable="false"
+        show-icon
+        style="margin-bottom: 16px"
+      />
       <el-form-item label="用户名">
         <el-input v-model="userForm.username" />
       </el-form-item>

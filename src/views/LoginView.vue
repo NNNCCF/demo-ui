@@ -1,209 +1,238 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
-import { useI18n } from 'vue-i18n'
+import { ElMessage } from 'element-plus'
 import { authApi } from '@/api/modules'
 import { useAuthStore } from '@/stores/auth'
-import type { UserRole } from '@/types'
 import loginImage from '@/image/login-image.png'
 
-const { t } = useI18n()
 const router = useRouter()
 const authStore = useAuthStore()
-const formRef = ref<FormInstance>()
-const loading = ref(false)
-const loginError = ref('')
-const registerVisible = ref(false)
-const registerRef = ref<FormInstance>()
-const registerLoading = ref(false)
 
-const form = reactive({
+const loading = ref(false)
+const registerVisible = ref(false)
+const registerLoading = ref(false)
+const loginError = ref('')
+
+const loginForm = reactive({
   username: '',
-  role: 'ADMIN' as UserRole,
   password: '',
-  captchaInput: '',
-  remember: true,
+  captchaCode: '',
 })
 
 const registerForm = reactive({
   username: '',
   password: '',
-  role: 'GUARDIAN' as UserRole,
   region: '',
   phone: '',
+  captchaCode: '',
 })
 
-const captchaId = ref('')
-const captchaUrl = ref('')
+const loginCaptchaToken = ref('')
+const loginCaptchaUrl = ref('')
+const loginCooldownSeconds = ref(0)
 
-async function refreshCaptcha() {
-  try {
-    const res = await authApi.captcha()
-    if (res.code === 200 && res.data) {
-      captchaId.value = res.data.id
-      captchaUrl.value = res.data.url
-    } else {
-      ElMessage.error(res.msg || '获取验证码失败')
+const registerCaptchaToken = ref('')
+const registerCaptchaUrl = ref('')
+const registerCooldownSeconds = ref(0)
+
+let countdownTimer: number | null = null
+
+function parseCooldownSeconds(message: string) {
+  const match = message.match(/(\d+)/)
+  return match ? Number(match[1]) : 0
+}
+
+function ensureCountdown() {
+  if (countdownTimer !== null) {
+    return
+  }
+  countdownTimer = window.setInterval(() => {
+    if (loginCooldownSeconds.value > 0) {
+      loginCooldownSeconds.value -= 1
+      if (loginCooldownSeconds.value === 0) {
+        void loadLoginCaptcha()
+      }
     }
+    if (registerCooldownSeconds.value > 0) {
+      registerCooldownSeconds.value -= 1
+      if (registerCooldownSeconds.value === 0 && registerVisible.value) {
+        void loadRegisterCaptcha()
+      }
+    }
+  }, 1000)
+}
+
+async function loadLoginCaptcha() {
+  const response = await authApi.getCaptcha('LOGIN')
+  loginCaptchaToken.value = response.captchaToken
+  loginCaptchaUrl.value = response.imageUrl
+  loginCooldownSeconds.value = response.cooldownSeconds
+}
+
+async function loadRegisterCaptcha() {
+  const response = await authApi.getCaptcha('REGISTER')
+  registerCaptchaToken.value = response.captchaToken
+  registerCaptchaUrl.value = response.imageUrl
+  registerCooldownSeconds.value = response.cooldownSeconds
+}
+
+function resetRegisterForm() {
+  registerForm.username = ''
+  registerForm.password = ''
+  registerForm.region = ''
+  registerForm.phone = ''
+  registerForm.captchaCode = ''
+}
+
+async function submitLogin() {
+  if (!loginForm.username || !loginForm.password || !loginForm.captchaCode) {
+    ElMessage.warning('请完整填写登录信息')
+    return
+  }
+  if (loginCooldownSeconds.value > 0) {
+    ElMessage.warning(`请 ${loginCooldownSeconds.value} 秒后重试`)
+    return
+  }
+  loading.value = true
+  loginError.value = ''
+  try {
+    const response = await authApi.login({
+      username: loginForm.username,
+      password: loginForm.password,
+      captchaToken: loginCaptchaToken.value,
+      captchaCode: loginForm.captchaCode,
+    })
+    authStore.setAuth(response.token, {
+      userId: response.userId,
+      username: response.username,
+      role: response.role,
+      orgId: response.orgId,
+      orgType: response.orgType,
+      forcePasswordChange: response.forcePasswordChange,
+    })
+    ElMessage.success('登录成功')
+    loginForm.captchaCode = ''
+    await loadLoginCaptcha()
+    await router.push(response.forcePasswordChange ? '/change-password' : '/dashboard')
   } catch (error) {
-    ElMessage.error('获取验证码失败')
+    const message = error instanceof Error ? error.message : '登录失败'
+    loginError.value = message
+    const cooldown = parseCooldownSeconds(message)
+    if (cooldown > 0) {
+      loginCooldownSeconds.value = cooldown
+      loginCaptchaToken.value = ''
+      loginCaptchaUrl.value = ''
+    }
+    loginForm.captchaCode = ''
+    await loadLoginCaptcha()
+  } finally {
+    loading.value = false
   }
 }
 
-onMounted(() => {
-  refreshCaptcha()
+async function submitRegister() {
+  if (!registerForm.username || !registerForm.password || !registerForm.captchaCode) {
+    ElMessage.warning('请完整填写注册信息')
+    return
+  }
+  if (registerCooldownSeconds.value > 0) {
+    ElMessage.warning(`请 ${registerCooldownSeconds.value} 秒后重试`)
+    return
+  }
+  registerLoading.value = true
+  try {
+    await authApi.register({
+      username: registerForm.username,
+      password: registerForm.password,
+      region: registerForm.region || undefined,
+      phone: registerForm.phone || undefined,
+      captchaToken: registerCaptchaToken.value,
+      captchaCode: registerForm.captchaCode,
+    })
+    ElMessage.success('注册成功，请登录')
+    loginForm.username = registerForm.username
+    loginForm.password = registerForm.password
+    registerVisible.value = false
+    resetRegisterForm()
+    await loadLoginCaptcha()
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '注册失败'
+    const cooldown = parseCooldownSeconds(message)
+    if (cooldown > 0) {
+      registerCooldownSeconds.value = cooldown
+      registerCaptchaToken.value = ''
+      registerCaptchaUrl.value = ''
+    }
+    registerForm.captchaCode = ''
+    if (registerVisible.value) {
+      await loadRegisterCaptcha()
+    }
+  } finally {
+    registerLoading.value = false
+  }
+}
+
+watch(registerVisible, async (visible) => {
+  if (visible) {
+    registerForm.captchaCode = ''
+    await loadRegisterCaptcha()
+  }
 })
 
-const rules: FormRules = {
-  username: [{ required: true, message: t('login.userIdRule'), trigger: 'blur' }],
-  password: [{ required: true, message: t('login.passwordRule'), trigger: 'blur' }],
-  captchaInput: [
-    {
-      required: true,
-      message: t('login.captchaError'),
-      trigger: 'blur',
-    },
-  ],
-}
+onMounted(async () => {
+  ensureCountdown()
+  await loadLoginCaptcha()
+})
 
-const registerRules: FormRules = {
-  username: [{ required: true, message: t('login.usernameRule'), trigger: 'blur' }],
-  password: [{ required: true, message: t('login.passwordRule'), trigger: 'blur' }],
-}
-
-async function submit() {
-  loginError.value = ''
-  await formRef.value?.validate(async (valid) => {
-    if (!valid) {
-      return
-    }
-    loading.value = true
-    try {
-      const verifyRes = await authApi.verifyCaptcha(captchaId.value, form.captchaInput)
-      if (verifyRes.code !== 1 && verifyRes.code !== 200) {
-        ElMessage.error(verifyRes.msg || '验证码错误')
-        refreshCaptcha()
-        form.captchaInput = ''
-        loading.value = false
-        return
-      }
-      
-      const response = await authApi.login({ username: form.username, role: form.role, password: form.password })
-      authStore.setAuth(response.token, { userId: response.userId, role: response.role, username: response.username, orgId: response.orgId, orgType: response.orgType })
-      ElMessage.success('登录成功')
-      router.push('/dashboard')
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : '登录失败'
-      loginError.value = message
-      refreshCaptcha()
-      form.captchaInput = ''
-    } finally {
-      loading.value = false
-    }
-  })
-}
-
-async function submitRegister() {
-  await registerRef.value?.validate(async (valid) => {
-    if (!valid) {
-      return
-    }
-    registerLoading.value = true
-    try {
-      const res = await authApi.register({
-        username: registerForm.username,
-        password: registerForm.password,
-        role: registerForm.role,
-        region: registerForm.region,
-        phone: registerForm.phone,
-      })
-      registerVisible.value = false
-      
-      // Auto fill login form
-      if (res.username) {
-        form.username = res.username
-        ElMessageBox.alert(`注册成功！您的登录用户名是：${res.username}`, '注册成功', {
-          confirmButtonText: '去登录',
-          callback: () => {
-             // focused
-          }
-        })
-      } else {
-        ElMessage.success(t('login.registerSuccess'))
-      }
-
-      form.role = registerForm.role
-      form.password = registerForm.password
-      form.captchaInput = ''
-      refreshCaptcha()
-      registerForm.username = ''
-      registerForm.password = ''
-      registerForm.role = 'GUARDIAN'
-      registerForm.region = ''
-      registerForm.phone = ''
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : '注册失败'
-      ElMessage.error(message)
-    } finally {
-      registerLoading.value = false
-    }
-  })
-}
+onBeforeUnmount(() => {
+  if (countdownTimer !== null) {
+    window.clearInterval(countdownTimer)
+    countdownTimer = null
+  }
+})
 </script>
 
 <template>
   <div class="login-page">
-    <div
-      class="login-left"
-      :style="{
-        backgroundImage: `url(${loginImage})`,
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-      }"
-    >
-    </div>
+    <div class="login-left" :style="{ backgroundImage: `url(${loginImage})` }" />
     <div class="login-right">
       <div class="form-container">
         <div class="form-header">
           <h2>欢迎登录</h2>
           <p class="subtitle">卓凯安伴综合管理平台</p>
         </div>
-        <el-form ref="formRef" :model="form" :rules="rules" class="login-form">
-          <el-form-item prop="username">
-            <el-input v-model="form.username" placeholder="请输入用户名" class="custom-input" />
+
+        <el-form class="login-form" @submit.prevent="submitLogin">
+          <el-form-item>
+            <el-input v-model="loginForm.username" placeholder="请输入用户名" />
           </el-form-item>
-          <el-form-item prop="password">
-            <el-input
-              v-model="form.password"
-              show-password
-              type="password"
-              placeholder="请输入密码"
-              class="custom-input"
-              @keyup.enter="submit"
-            />
+          <el-form-item>
+            <el-input v-model="loginForm.password" type="password" show-password placeholder="请输入密码" @keyup.enter="submitLogin" />
           </el-form-item>
-          <el-form-item prop="captchaInput">
+          <el-form-item>
             <div class="captcha-row">
               <el-input
-                v-model="form.captchaInput"
+                v-model="loginForm.captchaCode"
                 placeholder="请输入验证码"
-                class="custom-input captcha-input"
-                @keyup.enter="submit"
+                :disabled="loginCooldownSeconds > 0"
+                @keyup.enter="submitLogin"
               />
-              <div class="captcha-img" @click="refreshCaptcha">
-                <img v-if="captchaUrl" :src="captchaUrl" alt="captcha" />
+              <div class="captcha-img" @click="loginCooldownSeconds === 0 && loadLoginCaptcha()">
+                <template v-if="loginCooldownSeconds > 0">
+                  <span>{{ loginCooldownSeconds }} 秒后重试</span>
+                </template>
+                <img v-else-if="loginCaptchaUrl" :src="loginCaptchaUrl" alt="captcha" />
                 <span v-else>加载中...</span>
               </div>
             </div>
           </el-form-item>
-          
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-            <el-checkbox v-model="form.remember">记住我</el-checkbox>
+
+          <div class="action-row">
             <el-button link type="primary" @click="registerVisible = true">注册账号</el-button>
           </div>
 
-          <el-button type="primary" class="submit-btn" :loading="loading" @click="submit">
+          <el-button type="primary" class="submit-btn" :loading="loading" :disabled="loginCooldownSeconds > 0" @click="submitLogin">
             登录
           </el-button>
           <div v-if="loginError" class="error">{{ loginError }}</div>
@@ -212,32 +241,37 @@ async function submitRegister() {
     </div>
   </div>
 
-  <!-- Register Dialog -->
-  <el-dialog v-model="registerVisible" :title="t('login.registerTitle')" width="520px">
-    <el-form ref="registerRef" :model="registerForm" :rules="registerRules" label-position="top">
-      <el-form-item :label="t('login.username')" prop="username">
+  <el-dialog v-model="registerVisible" title="注册账号" width="520px">
+    <el-form label-position="top">
+      <el-form-item label="用户名">
         <el-input v-model="registerForm.username" />
       </el-form-item>
-      <el-form-item :label="t('login.password')" prop="password">
-        <el-input v-model="registerForm.password" show-password type="password" />
+      <el-form-item label="密码">
+        <el-input v-model="registerForm.password" type="password" show-password />
       </el-form-item>
-      <el-form-item :label="t('login.role')" prop="role">
-        <el-select v-model="registerForm.role" style="width: 100%">
-          <el-option :label="t('login.admin')" value="ADMIN" />
-          <el-option :label="t('login.guardian')" value="GUARDIAN" />
-        </el-select>
-      </el-form-item>
-      <el-form-item :label="t('login.region')" prop="region">
+      <el-form-item label="区域">
         <el-input v-model="registerForm.region" />
       </el-form-item>
-      <el-form-item :label="t('login.phone')" prop="phone">
+      <el-form-item label="手机号">
         <el-input v-model="registerForm.phone" />
+      </el-form-item>
+      <el-form-item label="验证码">
+        <div class="captcha-row">
+          <el-input v-model="registerForm.captchaCode" :disabled="registerCooldownSeconds > 0" />
+          <div class="captcha-img" @click="registerCooldownSeconds === 0 && loadRegisterCaptcha()">
+            <template v-if="registerCooldownSeconds > 0">
+              <span>{{ registerCooldownSeconds }} 秒后重试</span>
+            </template>
+            <img v-else-if="registerCaptchaUrl" :src="registerCaptchaUrl" alt="register-captcha" />
+            <span v-else>加载中...</span>
+          </div>
+        </div>
       </el-form-item>
     </el-form>
     <template #footer>
-      <el-button @click="registerVisible = false">{{ t('common.cancel') }}</el-button>
-      <el-button type="primary" :loading="registerLoading" @click="submitRegister">
-        {{ t('login.registerSubmit') }}
+      <el-button @click="registerVisible = false">取消</el-button>
+      <el-button type="primary" :loading="registerLoading" :disabled="registerCooldownSeconds > 0" @click="submitRegister">
+        注册
       </el-button>
     </template>
   </el-dialog>
@@ -245,105 +279,67 @@ async function submitRegister() {
 
 <style scoped>
 .login-page {
-  height: 100vh;
+  min-height: 100vh;
   display: flex;
-  overflow: hidden;
 }
 
 .login-left {
   flex: 1;
-  background-color: #f0f9ff; /* Fallback color */
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
 }
 
 .login-right {
-  flex: 0 0 500px;
-  background: white;
+  width: 460px;
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 32px;
+  background: linear-gradient(180deg, #f7fbff 0%, #eef5ff 100%);
 }
 
 .form-container {
   width: 100%;
   max-width: 360px;
-  padding: 40px;
 }
 
 .form-header {
-  margin-bottom: 40px;
-  text-align: left;
+  margin-bottom: 24px;
 }
 
 .form-header h2 {
-  font-size: 32px;
-  font-weight: 600;
-  color: #1e293b;
-  margin: 0 0 12px 0;
+  margin: 0;
+  font-size: 30px;
+  color: #102542;
 }
 
 .subtitle {
-  font-size: 14px;
-  color: #64748b;
-  margin: 0;
-}
-
-.custom-input :deep(.el-input__wrapper) {
-  background-color: #f8fafc;
-  box-shadow: none !important;
-  border-radius: 8px;
-  padding: 8px 16px;
-  height: 48px;
-}
-
-.custom-input :deep(.el-input__inner) {
-  height: 48px;
-}
-
-.custom-input :deep(.el-input__wrapper:hover),
-.custom-input :deep(.el-input__wrapper.is-focus) {
-  background-color: #f1f5f9;
-}
-
-.submit-btn {
-  width: 100%;
-  height: 48px;
-  border-radius: 8px;
-  font-size: 16px;
-  margin-top: 16px;
-  background-color: #1d4ed8;
-  border-color: #1d4ed8;
-}
-
-.submit-btn:hover {
-  background-color: #1e40af;
-  border-color: #1e40af;
+  margin: 8px 0 0;
+  color: #5b7083;
 }
 
 .captcha-row {
-  display: flex;
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr 132px;
   gap: 12px;
-  align-items: center;
-}
-
-.captcha-input {
-  flex: 1;
 }
 
 .captcha-img {
-  width: 150px;
-  height: 50px;
+  min-height: 40px;
+  border: 1px solid #d0d7e2;
   border-radius: 8px;
-  overflow: hidden;
-  cursor: pointer;
-  border: 1px solid #e2e8f0;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #f8fafc;
+  background: #fff;
+  cursor: pointer;
+  overflow: hidden;
+  color: #4f6478;
+  font-size: 12px;
+  text-align: center;
+  padding: 4px;
 }
 
 .captcha-img img {
@@ -352,40 +348,30 @@ async function submitRegister() {
   object-fit: cover;
 }
 
+.action-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 16px;
+}
+
+.submit-btn {
+  width: 100%;
+}
+
 .error {
-  margin-top: 16px;
-  color: #ef4444;
-  text-align: center;
-  font-size: 14px;
+  margin-top: 12px;
+  color: #d64545;
+  font-size: 13px;
 }
 
-@keyframes pulse {
-  0% {
-    transform: scale(1);
-    opacity: 1;
-  }
-  50% {
-    transform: scale(1.05);
-    opacity: 0.5;
-  }
-  100% {
-    transform: scale(1);
-    opacity: 1;
-  }
-}
-
-@media (max-width: 768px) {
-  .login-page {
-    flex-direction: column;
-  }
-  
+@media (max-width: 900px) {
   .login-left {
     display: none;
   }
-  
+
   .login-right {
-    flex: 1;
     width: 100%;
+    min-height: 100vh;
   }
 }
 </style>

@@ -18,8 +18,9 @@ export interface ApiResponse<T> {
 
 export interface LoginPayload {
   username: string
-  role: UserRole
   password: string
+  captchaToken: string
+  captchaCode: string
 }
 
 export interface LoginResult {
@@ -30,14 +31,23 @@ export interface LoginResult {
   orgType?: string
   token: string
   expireSeconds: number
+  forcePasswordChange: boolean
 }
 
 export interface RegisterPayload {
   username: string
   password: string
-  role: UserRole
   region?: string
   phone?: string
+  captchaToken: string
+  captchaCode: string
+}
+
+export interface AuthCaptcha {
+  captchaToken: string
+  imageUrl: string
+  expireSeconds: number
+  cooldownSeconds: number
 }
 
 export interface UserProfile {
@@ -47,6 +57,7 @@ export interface UserProfile {
   region?: string
   phone?: string
   status: 'ENABLED' | 'DISABLED'
+  orgId?: number
 }
 
 export interface Device {
@@ -159,11 +170,16 @@ export interface ServiceOrder {
   payAmount?: string
   payStatus?: string
   createdAt?: string
+  updatedAt?: string
   // 结构化订单字段
   contactName?: string
   contactPhone?: string
   serviceAddress?: string
   medicineList?: string
+  acceptTime?: string
+  deleted?: boolean
+  deletedAt?: string
+  deletedBy?: number
 }
 
 export interface NurseItem {
@@ -180,11 +196,16 @@ export interface NewsPost {
   title: string
   content: string
   visibility: string
+  category?: string
+  targetScope?: string
+  targetFamilyId?: number
+  targetFamilyName?: string
   publisherId: number
   publisherName: string
   publishTime: string
   attachments: string
   createdAt: string
+  updatedAt?: string
 }
 
 export interface ClientUser {
@@ -216,4 +237,5 @@ export interface FeedbackItem {
   content: string
   status: string
   createdAt: string
+  updatedAt?: string
 }
