@@ -11,6 +11,7 @@ import type {
   DataHistoryResponse,
   Device,
   DeviceLog,
+  DeviceProvisioningResult,
   DeviceType,
   FeedbackItem,
   HeartRateTrendPoint,
@@ -55,7 +56,9 @@ export const deviceApi = {
     longitude?: number
     familyId?: number
   }) =>
-    post<{ deviceId: string; deviceType: DeviceType; status: string }>('/devices', payload),
+    post<DeviceProvisioningResult>('/devices', payload),
+  rotateCredentials: (deviceId: string) =>
+    post<DeviceProvisioningResult>(`/devices/${deviceId}/mqtt-credentials`),
   update: (deviceId: string, payload: {
     deviceType: DeviceType
     targetId?: number
@@ -71,12 +74,15 @@ export const deviceApi = {
     familyId?: number
   }) => put<void>(`/devices/${deviceId}`, payload),
   delete: (deviceId: string) => del<void>(`/devices/${deviceId}`),
-  unbind: (deviceId: string) => post<void>('/devices/unbind', { deviceId }),
+  unbind: (deviceId: string) => del<void>(`/devices/${deviceId}/binding`),
   reset: (deviceId: string) => post<void>(`/devices/${deviceId}/reset`),
-  disable: (deviceId: string) => post<void>(`/devices/${deviceId}/disable`),
-  enable: (deviceId: string) => post<void>(`/devices/${deviceId}/enable`),
+  disable: (deviceId: string) => patch<void>(`/devices/${deviceId}/status`, { status: 'DISABLED' }),
+  enable: (deviceId: string) => patch<void>(`/devices/${deviceId}/status`, { status: 'ENABLED' }),
   control: (payload: { deviceId: string; commandType: string; payload: Record<string, unknown> }) =>
-    post<void>('/devices/control', payload),
+    post<void>(`/devices/${payload.deviceId}/commands`, {
+      commandType: payload.commandType,
+      payload: payload.payload,
+    }),
   logs: (deviceId: string) => get<DeviceLog[]>(`/devices/${deviceId}/logs`),
 }
 

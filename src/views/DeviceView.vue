@@ -7,7 +7,7 @@ import dayjs from 'dayjs'
 import { deviceApi, clientUserApi, wardApi, familyApi, organizationApi } from '@/api/modules'
 import { deviceStatusLabelMap, deviceTypeLabelMap } from '@/constants/dicts'
 import { exportJsonToExcel } from '@/utils/export'
-import type { ClientUser, Device, DeviceStatus, DeviceType } from '@/types'
+import type { ClientUser, Device, DeviceProvisioningResult, DeviceStatus, DeviceType } from '@/types'
 
 const router = useRouter()
 const loading = ref(false)
@@ -40,6 +40,8 @@ const targetVisible = ref(false)
 const newTarget = ref({ name: '', mobile: '' })
 
 const unbindVisible = ref(false)
+const credentialVisible = ref(false)
+const provisioningResult = ref<DeviceProvisioningResult | null>(null)
 const editing = ref({
   deviceId: '',
   deviceType: 'FALL_DETECTOR' as DeviceType,
@@ -126,6 +128,7 @@ function handleSelectionChange(rows: Device[]) {
 
 function openCreate() {
   currentDeviceId.value = null
+  provisioningResult.value = null
   editing.value = {
     deviceId: '',
     deviceType: 'FALL_DETECTOR',
@@ -206,7 +209,8 @@ async function saveDevice() {
     await deviceApi.update(currentDeviceId.value, payload)
     ElMessage.success('设备更新成功')
   } else {
-    await deviceApi.register(editing.value)
+    provisioningResult.value = await deviceApi.register(editing.value)
+    credentialVisible.value = true
     ElMessage.success('新增设备成功')
   }
   editVisible.value = false
@@ -245,6 +249,25 @@ async function confirmUnbind() {
   await loadDevices()
 }
 
+async function rotateCredentials(device: Device) {
+  try {
+    await ElMessageBox.confirm(
+      `确认轮换设备 ${device.deviceId} 的 MQTT 凭证吗？轮换后旧密码会立即失效。`,
+      '轮换凭证',
+      {
+        type: 'warning',
+        confirmButtonText: '确认轮换',
+        cancelButtonText: '取消',
+      },
+    )
+    provisioningResult.value = await deviceApi.rotateCredentials(device.deviceId)
+    credentialVisible.value = true
+    ElMessage.success('MQTT 凭证已轮换')
+  } catch {
+    // Cancelled
+  }
+}
+
 async function toggleDeviceStatus(device: Device) {
   if (device.status === 'DISABLED') {
     await deviceApi.enable(device.deviceId)
@@ -272,6 +295,18 @@ function exportExcel() {
 
 function deviceStatusText(value: DeviceStatus) {
   return deviceStatusLabelMap[value]
+}
+
+async function copyCredential(label: string, value?: string) {
+  if (!value) {
+    return
+  }
+  try {
+    await navigator.clipboard.writeText(value)
+    ElMessage.success(`${label}已复制`)
+  } catch {
+    ElMessage.warning(`复制${label}失败，请手动复制`)
+  }
 }
 
 onMounted(async () => {
@@ -404,9 +439,10 @@ onUnmounted(() => {
       <el-table-column prop="medicalInstitution" label="所属医疗机构" min-width="160" show-overflow-tooltip />
       <el-table-column prop="propertyManagement" label="所属物业" min-width="160" show-overflow-tooltip />
       
-      <el-table-column label="操作" width="200" fixed="right">
+      <el-table-column label="操作" width="280" fixed="right">
         <template #default="{ row }">
           <el-button link type="primary" size="small" @click="openEdit(row)">编辑</el-button>
+          <el-button link type="success" size="small" @click="rotateCredentials(row)">凭证</el-button>
           <el-button link type="warning" size="small" @click="openUnbind(row.deviceId)">解绑</el-button>
           <el-button 
             link 
@@ -441,6 +477,38 @@ onUnmounted(() => {
       <template #footer>
         <el-button @click="unbindVisible = false">取消</el-button>
         <el-button type="primary" @click="confirmUnbind">确认</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog
+      v-model="credentialVisible"
+      title="MQTT 凭证"
+      width="520px"
+    >
+      <div v-if="provisioningResult" class="credential-panel">
+        <div class="credential-tip">
+          密码只展示这一次，请及时保存到设备初始化流程或发放记录中。
+        </div>
+        <el-form label-width="110px">
+          <el-form-item label="设备编号">
+            <el-input :model-value="provisioningResult.deviceId" readonly />
+          </el-form-item>
+          <el-form-item label="MQTT 用户名">
+            <div class="credential-row">
+              <el-input :model-value="provisioningResult.mqttUsername" readonly />
+              <el-button @click="copyCredential('用户名', provisioningResult.mqttUsername)">复制</el-button>
+            </div>
+          </el-form-item>
+          <el-form-item label="MQTT 密码">
+            <div class="credential-row">
+              <el-input :model-value="provisioningResult.mqttPassword" readonly show-password />
+              <el-button type="primary" plain @click="copyCredential('密码', provisioningResult.mqttPassword)">复制</el-button>
+            </div>
+          </el-form-item>
+        </el-form>
+      </div>
+      <template #footer>
+        <el-button type="primary" @click="credentialVisible = false">我已保存</el-button>
       </template>
     </el-dialog>
   </el-card>
@@ -599,6 +667,27 @@ onUnmounted(() => {
   justify-content: space-between;
   align-items: center;
   margin-top: 16px;
+}
+
+.credential-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.credential-tip {
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #f5f7fa;
+  color: #606266;
+  line-height: 1.6;
+}
+
+.credential-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  width: 100%;
 }
 
 .total-text {

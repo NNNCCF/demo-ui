@@ -81,6 +81,14 @@ export interface Device {
   familyId?: number
 }
 
+export interface DeviceProvisioningResult {
+  deviceId: string
+  deviceType: DeviceType
+  status: DeviceStatus
+  mqttUsername: string
+  mqttPassword: string
+}
+
 export interface DeviceLog {
   id: number
   deviceId: string
