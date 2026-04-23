@@ -39,7 +39,7 @@ const registerCooldownSeconds = ref(0)
 let countdownTimer: number | null = null
 
 function parseCooldownSeconds(message: string) {
-  const match = message.match(/(\d+)/)
+  const match = message.match(/retry in (\d+) seconds/i)
   return match ? Number(match[1]) : 0
 }
 
