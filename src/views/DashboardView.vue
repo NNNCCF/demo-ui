@@ -62,7 +62,9 @@ const activeAlarm = ref<DashboardAlarmItem | null>(null)
 const selectedAlarmResult = ref<'' | 'HANDLED' | 'IGNORED'>('')
 const isSubmittingAlarm = ref(false)
 const seenAlarmIds = ref<number[]>([])
-let polling = false
+const DASHBOARD_POLL_INTERVAL_MS = 1000
+let devicePolling = false
+let alarmPolling = false
 let pollTimer: ReturnType<typeof setInterval> | null = null
 
 function isDeviceFalling(device: Device) {
@@ -215,28 +217,36 @@ async function loadSummary() {
 }
 
 async function refreshAlarmSummarySilently() {
-  const alarms = await fetchDashboardAlarms(1)
-  updateAlarmSummary(alarms)
+  if (alarmPolling) {
+    return
+  }
+  alarmPolling = true
+  try {
+    const alarms = await fetchDashboardAlarms(1)
+    updateAlarmSummary(alarms)
 
-  enqueueDashboardAlarms(
-    sortDashboardAlarms(
-      alarms
-        .filter((item) => item.handleStatus === 'UNHANDLED')
-        .map((item) => normalizeDashboardAlarm(item, deviceList.value)),
-    ),
-  )
+    enqueueDashboardAlarms(
+      sortDashboardAlarms(
+        alarms
+          .filter((item) => item.handleStatus === 'UNHANDLED')
+          .map((item) => normalizeDashboardAlarm(item, deviceList.value)),
+      ),
+    )
+  } finally {
+    alarmPolling = false
+  }
 }
 
 async function refreshDeviceSummarySilently() {
-  if (polling) {
+  if (devicePolling) {
     return
   }
-  polling = true
+  devicePolling = true
   try {
     const devices = await deviceApi.list()
     applyDeviceSummary(devices)
   } finally {
-    polling = false
+    devicePolling = false
   }
 }
 
@@ -371,9 +381,9 @@ onMounted(async () => {
   await initMap()
   renderMapMarkers()
   pollTimer = setInterval(() => {
-    refreshDeviceSummarySilently()
-    refreshAlarmSummarySilently()
-  }, 15000)
+    void refreshDeviceSummarySilently()
+    void refreshAlarmSummarySilently()
+  }, DASHBOARD_POLL_INTERVAL_MS)
 })
 
 watch(mapPoints, () => {
