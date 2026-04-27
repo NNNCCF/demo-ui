@@ -1,13 +1,15 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import dayjs from 'dayjs'
+import { ElMessage } from 'element-plus'
 import { alarmApi, deviceApi, serviceOrderApi } from '@/api/modules'
+import { alarmLevelLabelMap, alarmStatusLabelMap, alarmTypeLabelMap } from '@/constants/dicts'
 import { useAuthStore } from '@/stores/auth'
 import healthHomeIcon from '@/image/health-home.png'
 import warnHomeIcon from '@/image/warn-home.png'
 import offlineHomeIcon from '@/image/offline-home.png'
 
-import type { Device } from '@/types'
+import type { Alarm, Device } from '@/types'
 
 const mapRef = ref<HTMLElement>()
 const authStore = useAuthStore()
@@ -36,6 +38,7 @@ const summary = ref({
 
 const pointDialogVisible = ref(false)
 const currentPointDetail = ref<Record<string, string>>({})
+const deviceList = ref<Device[]>([])
 interface MapPoint {
   type: string
   name: string
@@ -45,7 +48,20 @@ interface MapPoint {
   detail: Record<string, string>
 }
 
+interface DashboardAlarmItem extends Alarm {
+  targetName: string
+  address: string
+  typeLabel: string
+  levelLabel: string
+  statusLabel: string
+}
+
 const mapPoints = ref<MapPoint[]>([])
+const alarmQueue = ref<DashboardAlarmItem[]>([])
+const activeAlarm = ref<DashboardAlarmItem | null>(null)
+const selectedAlarmResult = ref<'' | 'HANDLED' | 'IGNORED'>('')
+const isSubmittingAlarm = ref(false)
+const seenAlarmIds = ref<number[]>([])
 let polling = false
 let pollTimer: ReturnType<typeof setInterval> | null = null
 
@@ -93,6 +109,7 @@ function openPoint(point: MapPoint) {
 }
 
 function applyDeviceSummary(devices: Awaited<ReturnType<typeof deviceApi.list>>) {
+  deviceList.value = devices
   summary.value.totalDevices = devices.length
   summary.value.onlineDevices = devices.filter((d) => d.status === 'ONLINE').length
   summary.value.offlineDevices = devices.filter((d) => d.status !== 'ONLINE').length
@@ -115,19 +132,7 @@ function applyDeviceSummary(devices: Awaited<ReturnType<typeof deviceApi.list>>)
   }))
 }
 
-async function loadSummary() {
-  const devices = await deviceApi.list()
-  applyDeviceSummary(devices)
-
-  const userId = authStore.userInfo?.userId
-  const role = authStore.userInfo?.role
-  const endTime = dayjs().toISOString()
-  const startTime = dayjs().subtract(1, 'day').toISOString()
-  const alarms = await alarmApi.list({
-    guardianId: role === 'ADMIN' ? undefined : userId,
-    startTime,
-    endTime,
-  }).catch(() => [])
+function updateAlarmSummary(alarms: Alarm[]) {
   summary.value.todayEmergencies = alarms.filter((a) => a.alarmLevel === 'EMERGENCY').length
   summary.value.todayNormals = alarms.filter((a) => a.alarmLevel === 'NORMAL').length
   summary.value.alarmFall = alarms.filter((a) => a.alarmType === 'FALL').length
@@ -135,28 +140,91 @@ async function loadSummary() {
   summary.value.alarmBreathRate = alarms.filter((a) => a.alarmType === 'BREATH_RATE').length
   summary.value.alarmDeviceOffline = alarms.filter((a) => a.alarmType === 'DEVICE_OFFLINE').length
   summary.value.alarmUnhandled = alarms.filter((a) => a.handleStatus === 'UNHANDLED').length
-  const orders = await serviceOrderApi.list({ targetId: userId ?? undefined }).catch(() => [])
+}
+
+function buildAlarmQuery(days = 1) {
+  const userId = authStore.userInfo?.userId
+  const role = authStore.userInfo?.role
+
+  return {
+    guardianId: role === 'ADMIN' ? undefined : userId,
+    startTime: dayjs().subtract(days, 'day').toISOString(),
+    endTime: dayjs().toISOString(),
+  }
+}
+
+async function fetchDashboardAlarms(days = 1) {
+  return alarmApi.list(buildAlarmQuery(days)).catch(() => [])
+}
+
+function normalizeDashboardAlarm(alarm: Alarm, devices: Device[]): DashboardAlarmItem {
+  const device = devices.find((item) => item.deviceId === alarm.deviceId)
+  return {
+    ...alarm,
+    targetName: device?.targetName || (alarm.targetId ? `监护对象 ${alarm.targetId}` : '未绑定监护对象'),
+    address: device?.address || device?.homeLocation || '未配置家庭地址',
+    typeLabel: alarmTypeLabelMap[alarm.alarmType] || alarm.alarmType,
+    levelLabel: alarmLevelLabelMap[alarm.alarmLevel] || alarm.alarmLevel,
+    statusLabel: alarmStatusLabelMap[alarm.handleStatus] || alarm.handleStatus,
+  }
+}
+
+function sortDashboardAlarms(items: DashboardAlarmItem[]) {
+  return [...items].sort((left, right) => dayjs(left.alarmTime).valueOf() - dayjs(right.alarmTime).valueOf())
+}
+
+function openNextDashboardAlarm() {
+  activeAlarm.value = alarmQueue.value.shift() || null
+  selectedAlarmResult.value = ''
+}
+
+function enqueueDashboardAlarms(items: DashboardAlarmItem[]) {
+  const unseenItems = items.filter((item) => !seenAlarmIds.value.includes(item.id))
+  if (!unseenItems.length) {
+    return
+  }
+
+  alarmQueue.value = sortDashboardAlarms([...alarmQueue.value, ...unseenItems])
+  seenAlarmIds.value = [...new Set([...seenAlarmIds.value, ...unseenItems.map((item) => item.id)])]
+
+  if (!activeAlarm.value) {
+    openNextDashboardAlarm()
+  }
+}
+
+async function loadSummary() {
+  const [devices, recentAlarms, historicalAlarms, orders] = await Promise.all([
+    deviceApi.list(),
+    fetchDashboardAlarms(1),
+    fetchDashboardAlarms(365),
+    serviceOrderApi.list({ targetId: authStore.userInfo?.userId ?? undefined }).catch(() => []),
+  ])
+
+  applyDeviceSummary(devices)
+  updateAlarmSummary(recentAlarms)
   summary.value.pendingOrders = orders.filter((order) => order.status === 'PENDING').length
   summary.value.completedOrders = orders.filter((order) => order.status === 'COMPLETED').length
+
+  enqueueDashboardAlarms(
+    sortDashboardAlarms(
+      historicalAlarms
+        .filter((item) => item.handleStatus === 'UNHANDLED')
+        .map((item) => normalizeDashboardAlarm(item, devices)),
+    ),
+  )
 }
 
 async function refreshAlarmSummarySilently() {
-  const userId = authStore.userInfo?.userId
-  const role = authStore.userInfo?.role
-  const endTime = dayjs().toISOString()
-  const startTime = dayjs().subtract(1, 'day').toISOString()
-  const alarms = await alarmApi.list({
-    guardianId: role === 'ADMIN' ? undefined : userId,
-    startTime,
-    endTime,
-  }).catch(() => [])
-  summary.value.todayEmergencies = alarms.filter((a) => a.alarmLevel === 'EMERGENCY').length
-  summary.value.todayNormals = alarms.filter((a) => a.alarmLevel === 'NORMAL').length
-  summary.value.alarmFall = alarms.filter((a) => a.alarmType === 'FALL').length
-  summary.value.alarmHeartRate = alarms.filter((a) => a.alarmType === 'HEART_RATE').length
-  summary.value.alarmBreathRate = alarms.filter((a) => a.alarmType === 'BREATH_RATE').length
-  summary.value.alarmDeviceOffline = alarms.filter((a) => a.alarmType === 'DEVICE_OFFLINE').length
-  summary.value.alarmUnhandled = alarms.filter((a) => a.handleStatus === 'UNHANDLED').length
+  const alarms = await fetchDashboardAlarms(1)
+  updateAlarmSummary(alarms)
+
+  enqueueDashboardAlarms(
+    sortDashboardAlarms(
+      alarms
+        .filter((item) => item.handleStatus === 'UNHANDLED')
+        .map((item) => normalizeDashboardAlarm(item, deviceList.value)),
+    ),
+  )
 }
 
 async function refreshDeviceSummarySilently() {
@@ -169,6 +237,33 @@ async function refreshDeviceSummarySilently() {
     applyDeviceSummary(devices)
   } finally {
     polling = false
+  }
+}
+
+async function submitDashboardAlarm() {
+  if (!activeAlarm.value || !selectedAlarmResult.value || isSubmittingAlarm.value) {
+    return
+  }
+
+  const currentAlarm = activeAlarm.value
+  isSubmittingAlarm.value = true
+
+  try {
+    await alarmApi.handle({
+      alarmId: currentAlarm.id,
+      handleStatus: selectedAlarmResult.value,
+      handlerId: authStore.userInfo?.userId ?? 0,
+      handleRemark: selectedAlarmResult.value === 'HANDLED' ? '首页地图弹窗已处理' : '首页地图弹窗已忽略',
+    })
+    ElMessage.success(selectedAlarmResult.value === 'HANDLED' ? '报警已标记为已处理' : '报警已标记为已忽略')
+    activeAlarm.value = null
+    selectedAlarmResult.value = ''
+    await refreshAlarmSummarySilently()
+    openNextDashboardAlarm()
+  } catch {
+    ElMessage.error('报警处理失败，请重试')
+  } finally {
+    isSubmittingAlarm.value = false
   }
 }
 
@@ -296,6 +391,7 @@ onUnmounted(() => {
 <template>
   <div class="dashboard">
     <div ref="mapRef" class="map-canvas" />
+    <div v-if="activeAlarm" class="alarm-red-glow" />
     <div v-if="mapError" class="map-error">{{ mapError }}</div>
     
     <div class="map-legend">
@@ -395,6 +491,68 @@ onUnmounted(() => {
         </el-descriptions-item>
       </el-descriptions>
     </el-dialog>
+
+    <div v-if="activeAlarm" class="alarm-dialog-wrap">
+      <div class="alarm-dialog-card">
+        <div class="alarm-dialog-eyebrow">家庭报警</div>
+        <div class="alarm-dialog-title">请确认本条家庭报警处理结果</div>
+        <div class="alarm-dialog-grid">
+          <div class="alarm-dialog-row">
+            <span class="alarm-dialog-key">报警类型</span>
+            <strong class="alarm-dialog-value">{{ activeAlarm.typeLabel }}</strong>
+          </div>
+          <div class="alarm-dialog-row">
+            <span class="alarm-dialog-key">告警级别</span>
+            <strong class="alarm-dialog-value">{{ activeAlarm.levelLabel }}</strong>
+          </div>
+          <div class="alarm-dialog-row">
+            <span class="alarm-dialog-key">监护对象</span>
+            <strong class="alarm-dialog-value">{{ activeAlarm.targetName }}</strong>
+          </div>
+          <div class="alarm-dialog-row">
+            <span class="alarm-dialog-key">设备号</span>
+            <strong class="alarm-dialog-value">{{ activeAlarm.deviceId || '-' }}</strong>
+          </div>
+          <div class="alarm-dialog-row alarm-dialog-row-full">
+            <span class="alarm-dialog-key">家庭地址</span>
+            <strong class="alarm-dialog-value">{{ activeAlarm.address }}</strong>
+          </div>
+          <div class="alarm-dialog-row alarm-dialog-row-full">
+            <span class="alarm-dialog-key">报警时间</span>
+            <strong class="alarm-dialog-value">{{ dayjs(activeAlarm.alarmTime).format('YYYY-MM-DD HH:mm:ss') }}</strong>
+          </div>
+        </div>
+
+        <div class="alarm-result-label">处理结果</div>
+        <div class="alarm-result-options">
+          <button
+            type="button"
+            class="alarm-result-option"
+            :class="{ selected: selectedAlarmResult === 'HANDLED' }"
+            @click="selectedAlarmResult = 'HANDLED'"
+          >
+            已处理
+          </button>
+          <button
+            type="button"
+            class="alarm-result-option"
+            :class="{ selected: selectedAlarmResult === 'IGNORED' }"
+            @click="selectedAlarmResult = 'IGNORED'"
+          >
+            已忽略
+          </button>
+        </div>
+
+        <button
+          type="button"
+          class="alarm-submit-btn"
+          :disabled="!selectedAlarmResult || isSubmittingAlarm"
+          @click="submitDashboardAlarm"
+        >
+          {{ isSubmittingAlarm ? '提交中...' : '关闭' }}
+        </button>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -450,6 +608,156 @@ onUnmounted(() => {
   width: 100%;
   height: 100%;
   overflow: hidden;
+}
+
+.alarm-red-glow {
+  position: absolute;
+  inset: -12%;
+  background: radial-gradient(circle at center, rgba(239, 68, 68, 0.36), rgba(239, 68, 68, 0.16) 42%, rgba(239, 68, 68, 0) 76%);
+  animation: dashboard-alarm-glow 1.8s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 11;
+}
+
+@keyframes dashboard-alarm-glow {
+  0%, 100% {
+    opacity: 0.58;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.96;
+    transform: scale(1.04);
+  }
+}
+
+.alarm-dialog-wrap {
+  position: absolute;
+  inset: 0;
+  z-index: 12;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  pointer-events: none;
+}
+
+.alarm-dialog-card {
+  width: min(440px, calc(100vw - 48px));
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 24px 80px rgba(127, 29, 29, 0.24);
+  border: 1px solid rgba(254, 202, 202, 0.86);
+  padding: 24px;
+  pointer-events: auto;
+}
+
+.alarm-dialog-eyebrow {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #dc2626;
+}
+
+.alarm-dialog-title {
+  margin-top: 8px;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.3;
+  color: #111827;
+}
+
+.alarm-dialog-grid {
+  margin-top: 18px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.alarm-dialog-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: rgba(248, 250, 252, 0.96);
+  border: 1px solid rgba(226, 232, 240, 0.9);
+}
+
+.alarm-dialog-row-full {
+  grid-column: 1 / -1;
+}
+
+.alarm-dialog-key {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.alarm-dialog-value {
+  font-size: 15px;
+  color: #0f172a;
+  line-height: 1.4;
+}
+
+.alarm-result-label {
+  margin-top: 20px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #475569;
+}
+
+.alarm-result-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.alarm-result-option {
+  height: 44px;
+  border: 1px solid #fecaca;
+  border-radius: 14px;
+  background: #fff5f5;
+  color: #991b1b;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.alarm-result-option:hover {
+  transform: translateY(-1px);
+}
+
+.alarm-result-option.selected {
+  border-color: #dc2626;
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  color: #ffffff;
+  box-shadow: 0 12px 30px rgba(220, 38, 38, 0.28);
+}
+
+.alarm-submit-btn {
+  margin-top: 18px;
+  width: 100%;
+  height: 48px;
+  border: none;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #111827, #1f2937);
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.alarm-submit-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.alarm-submit-btn:not(:disabled):hover {
+  transform: translateY(-1px);
 }
 
 .map-canvas {
@@ -706,6 +1014,10 @@ onUnmounted(() => {
 @media (max-width: 1024px) {
   .floating-panel {
     display: none; /* Hide on small screens or adjust */
+  }
+
+  .alarm-dialog-grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>
