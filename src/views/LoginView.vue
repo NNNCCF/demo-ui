@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { authApi } from '@/api/modules'
@@ -10,8 +10,6 @@ const router = useRouter()
 const authStore = useAuthStore()
 
 const loading = ref(false)
-const registerVisible = ref(false)
-const registerLoading = ref(false)
 const loginError = ref('')
 
 const loginForm = reactive({
@@ -20,21 +18,9 @@ const loginForm = reactive({
   captchaCode: '',
 })
 
-const registerForm = reactive({
-  username: '',
-  password: '',
-  region: '',
-  phone: '',
-  captchaCode: '',
-})
-
 const loginCaptchaToken = ref('')
 const loginCaptchaUrl = ref('')
 const loginCooldownSeconds = ref(0)
-
-const registerCaptchaToken = ref('')
-const registerCaptchaUrl = ref('')
-const registerCooldownSeconds = ref(0)
 
 let countdownTimer: number | null = null
 
@@ -54,12 +40,6 @@ function ensureCountdown() {
         void loadLoginCaptcha()
       }
     }
-    if (registerCooldownSeconds.value > 0) {
-      registerCooldownSeconds.value -= 1
-      if (registerCooldownSeconds.value === 0 && registerVisible.value) {
-        void loadRegisterCaptcha()
-      }
-    }
   }, 1000)
 }
 
@@ -68,21 +48,6 @@ async function loadLoginCaptcha() {
   loginCaptchaToken.value = response.captchaToken
   loginCaptchaUrl.value = response.imageUrl
   loginCooldownSeconds.value = response.cooldownSeconds
-}
-
-async function loadRegisterCaptcha() {
-  const response = await authApi.getCaptcha('REGISTER')
-  registerCaptchaToken.value = response.captchaToken
-  registerCaptchaUrl.value = response.imageUrl
-  registerCooldownSeconds.value = response.cooldownSeconds
-}
-
-function resetRegisterForm() {
-  registerForm.username = ''
-  registerForm.password = ''
-  registerForm.region = ''
-  registerForm.phone = ''
-  registerForm.captchaCode = ''
 }
 
 async function submitLogin() {
@@ -131,55 +96,6 @@ async function submitLogin() {
   }
 }
 
-async function submitRegister() {
-  if (!registerForm.username || !registerForm.password || !registerForm.captchaCode) {
-    ElMessage.warning('请完整填写注册信息')
-    return
-  }
-  if (registerCooldownSeconds.value > 0) {
-    ElMessage.warning(`请 ${registerCooldownSeconds.value} 秒后重试`)
-    return
-  }
-  registerLoading.value = true
-  try {
-    await authApi.register({
-      username: registerForm.username,
-      password: registerForm.password,
-      region: registerForm.region || undefined,
-      phone: registerForm.phone || undefined,
-      captchaToken: registerCaptchaToken.value,
-      captchaCode: registerForm.captchaCode,
-    })
-    ElMessage.success('注册成功，请登录')
-    loginForm.username = registerForm.username
-    loginForm.password = registerForm.password
-    registerVisible.value = false
-    resetRegisterForm()
-    await loadLoginCaptcha()
-  } catch (error) {
-    const message = error instanceof Error ? error.message : '注册失败'
-    const cooldown = parseCooldownSeconds(message)
-    if (cooldown > 0) {
-      registerCooldownSeconds.value = cooldown
-      registerCaptchaToken.value = ''
-      registerCaptchaUrl.value = ''
-    }
-    registerForm.captchaCode = ''
-    if (registerVisible.value) {
-      await loadRegisterCaptcha()
-    }
-  } finally {
-    registerLoading.value = false
-  }
-}
-
-watch(registerVisible, async (visible) => {
-  if (visible) {
-    registerForm.captchaCode = ''
-    await loadRegisterCaptcha()
-  }
-})
-
 onMounted(async () => {
   ensureCountdown()
   await loadLoginCaptcha()
@@ -195,25 +111,34 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="login-page">
-    <div class="login-left" :style="{ backgroundImage: `url(${loginImage})` }" />
-    <div class="login-right">
+    <section class="login-visual" :style="{ backgroundImage: `url(${loginImage})` }" />
+
+    <main class="login-right">
       <div class="form-container">
         <div class="form-header">
           <h2>欢迎登录</h2>
-          <p class="subtitle">卓凯安伴综合管理平台</p>
+          <p class="subtitle">使用管理员账号进入卓凯安伴后台。</p>
         </div>
 
         <el-form class="login-form" @submit.prevent="submitLogin">
-          <el-form-item>
-            <el-input v-model="loginForm.username" placeholder="请输入用户名" />
+          <el-form-item label="账号">
+            <el-input v-model="loginForm.username" size="large" placeholder="请输入用户名" clearable />
           </el-form-item>
-          <el-form-item>
-            <el-input v-model="loginForm.password" type="password" show-password placeholder="请输入密码" @keyup.enter="submitLogin" />
+          <el-form-item label="密码">
+            <el-input
+              v-model="loginForm.password"
+              size="large"
+              type="password"
+              show-password
+              placeholder="请输入密码"
+              @keyup.enter="submitLogin"
+            />
           </el-form-item>
-          <el-form-item>
+          <el-form-item label="验证码">
             <div class="captcha-row">
               <el-input
                 v-model="loginForm.captchaCode"
+                size="large"
                 placeholder="请输入验证码"
                 :disabled="loginCooldownSeconds > 0"
                 @keyup.enter="submitLogin"
@@ -228,62 +153,32 @@ onBeforeUnmount(() => {
             </div>
           </el-form-item>
 
-          <div class="action-row">
-            <el-button link type="primary" @click="registerVisible = true">注册账号</el-button>
-          </div>
-
-          <el-button type="primary" class="submit-btn" :loading="loading" :disabled="loginCooldownSeconds > 0" @click="submitLogin">
+          <el-button
+            type="primary"
+            size="large"
+            class="submit-btn"
+            :loading="loading"
+            :disabled="loginCooldownSeconds > 0"
+            @click="submitLogin"
+          >
             登录
           </el-button>
           <div v-if="loginError" class="error">{{ loginError }}</div>
         </el-form>
       </div>
-    </div>
+    </main>
   </div>
 
-  <el-dialog v-model="registerVisible" title="注册账号" width="520px">
-    <el-form label-position="top">
-      <el-form-item label="用户名">
-        <el-input v-model="registerForm.username" />
-      </el-form-item>
-      <el-form-item label="密码">
-        <el-input v-model="registerForm.password" type="password" show-password />
-      </el-form-item>
-      <el-form-item label="区域">
-        <el-input v-model="registerForm.region" />
-      </el-form-item>
-      <el-form-item label="手机号">
-        <el-input v-model="registerForm.phone" />
-      </el-form-item>
-      <el-form-item label="验证码">
-        <div class="captcha-row">
-          <el-input v-model="registerForm.captchaCode" :disabled="registerCooldownSeconds > 0" />
-          <div class="captcha-img" @click="registerCooldownSeconds === 0 && loadRegisterCaptcha()">
-            <template v-if="registerCooldownSeconds > 0">
-              <span>{{ registerCooldownSeconds }} 秒后重试</span>
-            </template>
-            <img v-else-if="registerCaptchaUrl" :src="registerCaptchaUrl" alt="register-captcha" />
-            <span v-else>加载中...</span>
-          </div>
-        </div>
-      </el-form-item>
-    </el-form>
-    <template #footer>
-      <el-button @click="registerVisible = false">取消</el-button>
-      <el-button type="primary" :loading="registerLoading" :disabled="registerCooldownSeconds > 0" @click="submitRegister">
-        注册
-      </el-button>
-    </template>
-  </el-dialog>
 </template>
 
 <style scoped>
 .login-page {
   min-height: 100vh;
   display: flex;
+  background: #eef3f8;
 }
 
-.login-left {
+.login-visual {
   flex: 1;
   background-position: center;
   background-repeat: no-repeat;
@@ -291,55 +186,108 @@ onBeforeUnmount(() => {
 }
 
 .login-right {
-  width: 460px;
+  width: 520px;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 32px;
-  background: linear-gradient(180deg, #f7fbff 0%, #eef5ff 100%);
+  padding: 48px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(244, 248, 252, 0.96)),
+    #f5f8fc;
 }
 
 .form-container {
   width: 100%;
-  max-width: 360px;
+  max-width: 392px;
+  padding: 36px;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 24px 70px rgba(15, 34, 67, 0.12);
+  border: 1px solid rgba(148, 163, 184, 0.18);
 }
 
 .form-header {
-  margin-bottom: 24px;
+  margin-bottom: 28px;
+}
+
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: #eef5ff;
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0;
 }
 
 .form-header h2 {
-  margin: 0;
-  font-size: 30px;
-  color: #102542;
+  margin: 14px 0 0;
+  font-size: 32px;
+  color: #102033;
+  letter-spacing: 0;
 }
 
 .subtitle {
-  margin: 8px 0 0;
-  color: #5b7083;
+  margin: 10px 0 0;
+  color: #64748b;
+  line-height: 1.6;
+}
+
+.login-form :deep(.el-form-item) {
+  margin-bottom: 18px;
+}
+
+.login-form :deep(.el-form-item__label) {
+  color: #334155;
+  font-weight: 600;
+}
+
+.login-form :deep(.el-input__wrapper) {
+  min-height: 44px;
+  border-radius: 10px;
+  box-shadow: 0 0 0 1px #dbe4ef inset;
+  background: #fbfdff;
+}
+
+.login-form :deep(.el-input__wrapper.is-focus) {
+  box-shadow: 0 0 0 1px #2563eb inset, 0 0 0 4px rgba(37, 99, 235, 0.10);
 }
 
 .captcha-row {
   width: 100%;
   display: grid;
-  grid-template-columns: 1fr 132px;
+  grid-template-columns: minmax(0, 1fr) 140px;
   gap: 12px;
+  align-items: center;
+}
+
+.captcha-row :deep(.el-input) {
+  width: 100%;
 }
 
 .captcha-img {
-  min-height: 40px;
-  border: 1px solid #d0d7e2;
-  border-radius: 8px;
+  min-height: 44px;
+  border: 1px solid #dbe4ef;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #fff;
+  background: #f8fafc;
   cursor: pointer;
   overflow: hidden;
-  color: #4f6478;
+  color: #64748b;
   font-size: 12px;
   text-align: center;
   padding: 4px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.captcha-img:hover {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.08);
 }
 
 .captcha-img img {
@@ -348,30 +296,38 @@ onBeforeUnmount(() => {
   object-fit: cover;
 }
 
-.action-row {
-  display: flex;
-  justify-content: flex-end;
-  margin-bottom: 16px;
-}
-
 .submit-btn {
   width: 100%;
+  height: 46px;
+  border-radius: 12px;
+  font-weight: 700;
+  box-shadow: 0 14px 26px rgba(37, 99, 235, 0.22);
 }
 
 .error {
   margin-top: 12px;
-  color: #d64545;
+  color: #dc2626;
   font-size: 13px;
+  line-height: 1.6;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #fef2f2;
 }
 
 @media (max-width: 900px) {
-  .login-left {
+  .login-visual {
     display: none;
   }
 
   .login-right {
     width: 100%;
     min-height: 100vh;
+    padding: 24px;
+  }
+
+  .form-container {
+    max-width: 440px;
+    padding: 28px;
   }
 }
 </style>
