@@ -131,7 +131,7 @@ router.beforeEach((to, _from, next) => {
   const authStore = useAuthStore()
   if (to.meta.public) {
     if (authStore.isAuthenticated) {
-      if (authStore.userInfo?.forcePasswordChange) {
+      if (authStore.userInfo?.forcePasswordChange && to.path !== '/change-password') {
         next('/change-password')
         return
       }
