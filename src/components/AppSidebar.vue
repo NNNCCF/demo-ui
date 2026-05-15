@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
@@ -12,7 +12,9 @@ import {
   Tickets,
   House,
   OfficeBuilding,
+  Phone,
   User,
+  SwitchButton,
 } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import logoImage from '@/image/main-left-top-image.png'
@@ -32,6 +34,10 @@ const menuList = [
   { name: '动态发布', path: '/news', icon: Promotion },
   { name: '家庭管理', path: '/families', icon: House },
   { name: '机构管理', path: '/organizations', icon: OfficeBuilding },
+  { name: '物业信息', path: '/property-managements', icon: OfficeBuilding },
+  { name: '客服电话', path: '/call-records', icon: Phone },
+  { name: '医生管理', path: '/doctors', icon: User },
+  { name: '角色权限', path: '/role-permissions', icon: Setting },
   { name: '系统管理', path: '/system', icon: Setting },
 ]
 
@@ -43,7 +49,11 @@ const visibleMenus = computed(() => {
     if (item.path === '/system' && role !== 'ADMIN') return false
     if (item.path === '/organizations' && role !== 'ADMIN') return false
     if (item.path === '/feedbacks' && role !== 'ADMIN') return false
-    if (item.path === '/caregiver' && orgType === 'MEDICAL_INSTITUTION') return false
+    if (item.path === '/property-managements' && role !== 'ADMIN') return false
+    if (item.path === '/call-records' && role !== 'ADMIN') return false
+    if (item.path === '/role-permissions' && role !== 'ADMIN') return false
+    if (item.path === '/doctors' && role !== 'ADMIN') return false
+    if (item.path === '/caregiver' && role !== 'ADMIN' && orgType === 'MEDICAL_INSTITUTION') return false
     return true
   })
 })
@@ -53,6 +63,11 @@ function handleSelect(path: string) {
     return
   }
   router.push({ path })
+}
+
+function logout() {
+  authStore.logout()
+  router.push('/login')
 }
 </script>
 
@@ -75,6 +90,11 @@ function handleSelect(path: string) {
         <span class="menu-label">{{ item.name }}</span>
       </el-menu-item>
     </el-menu>
+
+    <div class="logout-area" @click="logout">
+      <el-icon :size="22"><SwitchButton /></el-icon>
+      <span class="menu-label">退出登录</span>
+    </div>
   </div>
 </template>
 
@@ -153,6 +173,23 @@ function handleSelect(path: string) {
 .menu-label {
   margin-top: 6px;
   font-size: 12px;
+}
+
+.logout-area {
+  margin-top: auto;
+  margin-bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 12px 0;
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  width: 100%;
+  transition: color 0.2s;
+}
+
+.logout-area:hover {
+  color: #f56c6c;
 }
 
 :deep(.el-icon) {

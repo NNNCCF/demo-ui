@@ -2,7 +2,7 @@
 import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Link, CircleClose, Delete } from '@element-plus/icons-vue'
+import { Plus, Link, CircleClose, Download } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
 import { deviceApi, clientUserApi, wardApi, familyApi, organizationApi } from '@/api/modules'
 import { deviceStatusLabelMap, deviceTypeLabelMap } from '@/constants/dicts'
@@ -309,18 +309,28 @@ async function copyCredential(label: string, value?: string) {
   }
 }
 
+function startDevicePolling() {
+  pollTimer = setInterval(refreshDevicesSilently, 30000)
+}
+function stopDevicePolling() {
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null }
+}
+
 onMounted(async () => {
   await loadDevices()
-  pollTimer = setInterval(() => {
-    refreshDevicesSilently()
-  }, 5000)
+  startDevicePolling()
+  document.addEventListener('visibilitychange', () => {
+    document.hidden ? stopDevicePolling() : (startDevicePolling(), refreshDevicesSilently())
+  })
+  window.addEventListener('blur', stopDevicePolling)
+  window.addEventListener('focus', startDevicePolling)
 })
 
 onUnmounted(() => {
-  if (pollTimer) {
-    clearInterval(pollTimer)
-    pollTimer = null
-  }
+  stopDevicePolling()
+  document.removeEventListener('visibilitychange', stopDevicePolling)
+  window.removeEventListener('blur', stopDevicePolling)
+  window.removeEventListener('focus', startDevicePolling)
 })
 </script>
 
@@ -382,7 +392,7 @@ onUnmounted(() => {
           <el-icon><CircleClose /></el-icon> 批量禁用
         </el-button>
         <el-button type="primary" link @click="exportExcel">
-          <el-icon><Delete /></el-icon> 导出Excel
+          <el-icon><Download /></el-icon> 导出Excel
         </el-button>
       </div>
     </div>

@@ -1,0 +1,43 @@
+{"module":"Vue管理端","feature":"路由权限配置","status":"完成","priority":"P1","details":"路由守卫完整：public路由（/login）免登录、已登录跳转dashboard、强制修改密码拦截、角色校验（meta.roles）。","file":"src/router/index.ts"}
+{"module":"Vue管理端","feature":"路由权限 - change-password未标记public","status":"有缺陷","priority":"P2","details":"/change-password路由未设置meta.public，登录超时用户无法直接访问该页面修改密码，会被路由守卫拦截到/login。","file":"src/router/index.ts"}
+{"module":"Vue管理端","feature":"路由权限 - DeviceDetail路由无角色限制","status":"有缺陷","priority":"P2","details":"/devices/:id路由的meta.roles设为['ADMIN','GUARDIAN']，但未校验deviceId格式合法性，无效ID只显示错误提示无降级处理。","file":"src/router/index.ts"}
+{"module":"Vue管理端","feature":"HTTP请求封装","status":"完成","priority":"P1","details":"axios baseURL统一为/api，请求/响应拦截器完善：自动附加token、401自动登出、429友好提示、业务code=0校验。","file":"src/api/http.ts"}
+{"module":"Vue管理端","feature":"adminApi.systemStatus使用原始axios","status":"有缺陷","priority":"P1","details":"systemStatus()直接调用axios.get('/api/admin/system/status')，绕过http.ts自定义拦截器，丢失loading状态管理、401自动登出、code校验等能力。","file":"src/api/modules.ts"}
+{"module":"Vue管理端","feature":"API封装完整性","status":"有缺陷","priority":"P2","details":"logApi定义了operationLogs、loginLogs、notificationLogs三个接口，但前端没有任何视图调用它们，属于未使用的死代码。","file":"src/api/modules.ts"}
+{"module":"Vue管理端","feature":"后端API路径一致性","status":"完成","priority":"P1","details":"前端/api前缀+路由路径与后端@RequestMapping路径完全匹配：/api/alarms、/api/devices、/api/service-orders、/api/news等均正确。","file":"src/api/modules.ts + demo/src/main/web/*Controller.java"}
+{"module":"Vue管理端","feature":"登录页功能","status":"完成","priority":"P1","details":"验证码动态加载/cool down重试、强制改密引导、登录成功跳转、角色区分ADMIN/GUARDIAN。","file":"src/views/LoginView.vue"}
+{"module":"Vue管理端","feature":"登录页 - 注册功能缺失","status":"未实现","priority":"P2","details":"authApi.register接口已封装，LoginView中没有注册入口/tab切换功能。","file":"src/views/LoginView.vue"}
+{"module":"Vue管理端","feature":"告警页 - 筛选过滤的BREATH_RATE缺失","status":"有缺陷","priority":"P2","details":"告警类型筛选下拉只有FALL/HEART_RATE/DEVICE_OFFLINE，缺少BREATH_RATE（呼吸率异常），而alarmTypeLabelMap、alarmApi.list均支持此类型。","file":"src/views/AlarmView.vue"}
+{"module":"Vue管理端","feature":"告警页 - currentValue字段类型不匹配","status":"有缺陷","priority":"P2","details":"详情弹窗使用(selectedAlarm as any).currentValue显示触发值，但Alarm TypeScript接口中未定义currentValue字段，属于运行时字段而非类型安全。","file":"src/views/AlarmView.vue"}
+{"module":"Vue管理端","feature":"告警页 - 功能完整性","status":"完成","priority":"P1","details":"列表/详情/标记处理/一键处理/忽略/清空/导出Excel均实现，本地过滤配合服务端参数查询。","file":"src/views/AlarmView.vue"}
+{"module":"Vue管理端","feature":"告警页 - 清空操作无guardianId区分","status":"有缺陷","priority":"P2","details":"alarmApi.clearAll()调用del<void>('/alarms')无任何参数，后端会清空所有告警，缺乏guardianId作用域过滤。","file":"src/views/AlarmView.vue + src/api/modules.ts"}
+{"module":"Vue管理端","feature":"动态发布页","status":"完成","priority":"P1","details":"富文本编辑器（contentEditable）、CRUD功能、可见范围控制、附件管理。ADMIN可编辑/删除，GUARDIAN仅可查看。","file":"src/views/NewsView.vue"}
+{"module":"Vue管理端","feature":"动态发布 - 附件仅存储文件名","status":"有缺陷","priority":"P2","details":"附件上传仅获取了文件名(filename)，未上传文件内容到服务器，后端news表attachments存储的是文件名字符串数组，无法用于实际下载。","file":"src/views/NewsView.vue"}
+{"module":"Vue管理端","feature":"预约订单管理页","status":"完成","priority":"P1","details":"完整CRUD、派单、状态流转、统计卡片、ECharts图表、导出Excel、ADMIN操作权限控制。","file":"src/views/ServiceOrderView.vue"}
+{"module":"Vue管理端","feature":"系统管理页 - 服务器状态实时监控","status":"完成","priority":"P1","details":"JVM内存/CPU/磁盘/依赖服务健康/运行时间实时刷新。但使用了1秒轮询(1000ms)定时刷新服务器状态，可能加重服务器负担。","file":"src/views/SystemView.vue"}
+{"module":"Vue管理端","feature":"系统管理页 - 日志列表缺少类型筛选","status":"有缺陷","priority":"P2","details":"SystemView仅显示commandLogs（指令日志），不包含operationLogs/loginLogs/notificationLogs，后端AdminLogController支持完整日志查询但前端未呈现。","file":"src/views/SystemView.vue"}
+{"module":"Vue管理端","feature":"设备管理 - 导出Excel使用Delete图标","status":"有缺陷","priority":"P3","details":"设备管理页导出按钮错误使用了Delete图标，应为下载/导出相关图标。","file":"src/views/DeviceView.vue"}
+{"module":"Vue管理端","feature":"设备管理 - 5秒轮询刷新","status":"有缺陷","priority":"P2","details":"设备列表每5秒全量轮询刷新，在设备数量较大时可能造成性能问题，宜改为WebSocket或减少轮询频率。","file":"src/views/DeviceView.vue"}
+{"module":"Vue管理端","feature":"设备详情页 - 功能完整性","status":"完成","priority":"P1","details":"设备概览/基本信息/历史数据(ECharts图表)/消息解析/全量历史查询均实现，自动15秒刷新。","file":"src/views/DeviceDetailView.vue"}
+{"module":"Vue管理端","feature":"仪表盘 - 1秒重度轮询","status":"有缺陷","priority":"P1","details":"Dashboard使用1秒间隔(DASHBOARD_POLL_INTERVAL_MS=1000)同时轮询设备和告警数据，高频请求可能造成服务器压力。","file":"src/views/DashboardView.vue"}
+{"module":"Vue管理端","feature":"仪表盘 - 地图功能","status":"完成","priority":"P1","details":"高德地图集成、设备点位/标记（正常/异常/离线）、告警弹窗一键确认、数据看板统计概览、今日告警分类。","file":"src/views/DashboardView.vue"}
+{"module":"Vue管理端","feature":"机构管理页","status":"完成","priority":"P1","details":"机构CRUD、机构管理员创建、医护分配机构、护工管辖家庭展示、展开折叠详情。","file":"src/views/OrganizationView.vue"}
+{"module":"Vue管理端","feature":"医护绑定页","status":"完成","priority":"P1","details":"护工列表/设备解绑、家庭绑定、家庭详情抽屉（含被监护人/设备信息）。","file":"src/views/CaregiverView.vue"}
+{"module":"Vue管理端","feature":"家庭管理页","status":"完成","priority":"P1","details":"家庭CRUD、监护人管理（添加/移除）、详情抽屉展示设备与被监护人。","file":"src/views/FamilyView.vue"}
+{"module":"Vue管理端","feature":"用户管理(C端)页","status":"完成","priority":"P1","details":"用户CRUD、设备绑定/解绑、被监护人信息管理（性别/生日/身高/体重/慢病史）、表单校验。","file":"src/views/ClientUserView.vue"}
+{"module":"Vue管理端","feature":"密码修改页","status":"完成","priority":"P1","details":"首次登录强制改密逻辑、原密码验证、两次新密码一致性校验。但updateUserInfo未保留orgId/orgType等字段。","file":"src/views/ChangePasswordView.vue"}
+{"module":"Vue管理端","feature":"密码修改 - updateUserInfo未保留所有字段","status":"有缺陷","priority":"P2","details":"修改密码后updateUserInfo只传入了userId/role/forcePasswordChange，丢失了orgId和orgType字段（如果用户有这些属性）。","file":"src/views/ChangePasswordView.vue"}
+{"module":"Vue管理端","feature":"后端权限 vs 前端路由一致性","status":"完成","priority":"P1","details":"前端路由meta.roles与后端SecurityConfig权限基本一致：/api/admin/**需ADMIN、/api/alarms等需ADMIN或GUARDIAN、/api/feedbacks需ADMIN。","file":"src/router/index.ts + SecurityConfig.java"}
+{"module":"Vue管理端","feature":"后端权限 - /api/news路由规则可能覆盖","status":"有缺陷","priority":"P1","details":"后端SecurityConfig中requestMatchers(HttpMethod.POST,\"/api/news\").hasAnyRole(\"ADMIN\",\"INSTITUTION\",\"CAREGIVER\")与requestMatchers(\"/api/service-orders/**\",\"/api/news/**\").hasRole(\"ADMIN\")先后顺序问题可能导致POST到/news除了ADMIN其他角色被拒绝。","file":"demo/src/main/java/com/ncf/demo/config/SecurityConfig.java"}
+{"module":"Vue管理端","feature":"后端 - DoctorController前端无对应页面","status":"未实现","priority":"P2","details":"后端存在/api/doctors接口及DoctorController，但前端没有任何医生管理相关页面。","file":"demo/src/main/java/com/ncf/demo/web/DoctorController.java"}
+{"module":"Vue管理端","feature":"配置安全 - 高德地图Key明文提交","status":"有缺陷","priority":"P1","details":".env和.env.local文件中包含高德地图API Key和Security Code，已提交到代码仓库中。虽然前端built后仍可见，但应通过环境变量管理而非硬编码。","file":".env"}
+{"module":"Vue管理端","feature":"配置冗余 - .env和.env.local内容完全一致","status":"有缺陷","priority":"P3","details":".env和.env.local文件内容完全相同（高德Key），存在不必要的冗余。","file":".env / .env.local"}
+{"module":"Vue管理端","feature":"项目目录 - 新建文件夹残留","status":"有缺陷","priority":"P3","details":"项目根目录存在名为'新建文件夹'的空目录，应为误操作遗留。","file":"demo_ui/新建文件夹/"}
+{"module":"Vue管理端","feature":"构建产物 - dist目录被包含在项目中","status":"有缺陷","priority":"P3","details":"dist/构建产物目录存在项目目录中，不应包含在版本管理中（若已gitignore则忽略此条）。","file":"demo_ui/dist/"}
+{"module":"Vue管理端","feature":"侧边栏菜单 - 角色权限控制","status":"完成","priority":"P1","details":"菜单项根据userInfo.role动态显示：system/organizations/feedbacks仅ADMIN可见，其余ADMIN+GUARDIAN可见。","file":"src/components/AppSidebar.vue"}
+{"module":"Vue管理端","feature":"侧边栏 - '医护绑定'菜单显示逻辑","status":"有缺陷","priority":"P2","details":"AppSidebar中'医护绑定'(/caregiver)在orgType==='MEDICAL_INSTITUTION'时隐藏，但该路由meta.roles允许ADMIN和GUARDIAN，逻辑不一致：ADMIN即使有MEDICAL_INSTITUTION也会看不到该菜单项。","file":"src/components/AppSidebar.vue"}
+{"module":"Vue管理端","feature":"TypeScript类型 - Alarm缺少currentValue字段","status":"有缺陷","priority":"P2","details":"Alarm接口未定义currentValue字段，但在AlarmView.vue中通过as any访问，破坏类型安全。","file":"src/types/index.ts + src/views/AlarmView.vue"}
+{"module":"Vue管理端","feature":"i18n国际化 - 部分未使用","status":"有缺陷","priority":"P3","details":"配置了vue-i18n、zh-CN/en-US双语messages（通过locales/index.ts），但所有视图文件均使用硬编码中文标签（如'告警管理'），未使用$t或i18n函数。","file":"src/locales/index.ts"}
+{"module":"Vue管理端","feature":"导出工具 - PDF导出未使用","status":"未实现","priority":"P3","details":"utils/export.ts中实现了exportElementToPdf但没有任何视图调用该函数，属于死代码。","file":"src/utils/export.ts"}
+{"module":"Vue管理端","feature":"nginx代理 - Swagger/Actuator暴露风险","status":"有缺陷","priority":"P1","details":"nginx.conf中反向代理了/swagger-ui/、/v3/api-docs、/actuator/到后端。若后端appProperties.exposure设置为public，这些敏感端点将对外暴露。","file":"nginx.conf"}
+{"module":"Vue管理端","feature":"Docker构建 - Vue-tsc类型检查","status":"完成","priority":"P1","details":"Docker构建包含了vue-tsc类型检查和vite build两个阶段，保证构建质量。","file":"Dockerfile"}

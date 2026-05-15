@@ -114,7 +114,7 @@ async function handleAll() {
 
 async function clearAll() {
   await ElMessageBox.confirm('将永久删除所有告警记录，此操作不可恢复，确认吗？', '清空记录', { type: 'warning', confirmButtonText: '确认清空', confirmButtonClass: 'el-button--danger' })
-  await alarmApi.clearAll()
+  await alarmApi.clearAll(authStore.userInfo?.userId)
   ElMessage.success('已清空所有告警记录')
   await loadAlarms()
 }
@@ -178,6 +178,7 @@ onMounted(loadAlarms)
       <el-select v-model="filters.alarmType" placeholder="告警类型" style="width: 130px" clearable>
         <el-option label="跌倒" value="FALL" />
         <el-option label="心率异常" value="HEART_RATE" />
+        <el-option label="呼吸率异常" value="BREATH_RATE" />
         <el-option label="设备离线" value="DEVICE_OFFLINE" />
       </el-select>
       <el-select v-model="filters.alarmLevel" placeholder="告警级别" style="width: 120px" clearable>
@@ -272,7 +273,7 @@ onMounted(loadAlarms)
       <el-descriptions-item label="所属区划">{{ `区域-${String(selectedAlarm.targetId).slice(-1)}` }}</el-descriptions-item>
       <el-descriptions-item label="处理人ID">{{ selectedAlarm.handlerId ?? '-' }}</el-descriptions-item>
       <el-descriptions-item label="处理时间">{{ selectedAlarm.handleTime ? dayjs(selectedAlarm.handleTime).format('YYYY-MM-DD HH:mm:ss') : '-' }}</el-descriptions-item>
-      <el-descriptions-item v-if="(selectedAlarm as any).currentValue" label="触发值" :span="2">{{ (selectedAlarm as any).currentValue }}</el-descriptions-item>
+      <el-descriptions-item v-if="selectedAlarm.currentValue" label="触发值" :span="2">{{ selectedAlarm.currentValue }}</el-descriptions-item>
       <el-descriptions-item label="处理备注" :span="2">
         <el-input v-model="handleRemark" type="textarea" :rows="3" placeholder="填写处理备注" />
       </el-descriptions-item>

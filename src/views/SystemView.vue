@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { adminApi, alarmApi, organizationApi } from '@/api/modules'
+import { adminApi, alarmApi, logApi, organizationApi } from '@/api/modules'
 import { roleLabelMap } from '@/constants/dicts'
 import type { AlarmLevel, AlarmType, UserRole } from '@/types'
 
+type AdminManagedRole = 'ADMIN' | 'GUARDIAN'
 
 const resetPasswordVisible = ref(false)
 const resetPasswordForm = reactive({ userId: 0, username: '', newPassword: '' })
@@ -25,7 +26,7 @@ const addUserVisible = ref(false)
 const userForm = reactive({
   username: '',
   password: '',
-  role: 'GUARDIAN' as UserRole,
+  role: 'GUARDIAN' as AdminManagedRole,
   region: '',
   phone: '',
   orgId: null as number | null,
@@ -88,6 +89,10 @@ const paramsForm = reactive({
 })
 
 const logs = ref<{ id: number; deviceId?: string; commandBody: string; sentAt: string; responseStatus?: string }[]>([])
+const logActiveTab = ref('command')
+const operationLogs = ref<{ operatorId: number; action: string; resource: string; result: string; timestamp: string }[]>([])
+const loginLogs = ref<{ userId: number; ip: string; location: string; status: string; loginTime: string }[]>([])
+const notificationLogs = ref<{ targetId: number; channel: string; payload: string; sentAt: string; result: string }[]>([])
 
 
 async function saveUser() {
@@ -174,8 +179,21 @@ async function submitResetPassword() {
 async function loadLogs() {
   const start = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
   const end = new Date().toISOString()
-  const commandLogs = await adminApi.commandLogs(start, end).catch(() => [])
-  logs.value = commandLogs
+  logs.value = await adminApi.commandLogs(start, end).catch(() => [])
+}
+
+async function handleLogTabChange(tab: string) {
+  const start = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+  const end = new Date().toISOString()
+  if (tab === 'command') {
+    logs.value = await adminApi.commandLogs(start, end).catch(() => [])
+  } else if (tab === 'operation') {
+    operationLogs.value = await logApi.operationLogs(start, end).catch(() => [])
+  } else if (tab === 'login') {
+    loginLogs.value = await logApi.loginLogs(start, end).catch(() => [])
+  } else if (tab === 'notification') {
+    notificationLogs.value = await logApi.notificationLogs(start, end).catch(() => [])
+  }
 }
 
 async function loadUsers() {
@@ -419,12 +437,49 @@ onUnmounted(() => {
     </div>
 
     <el-card class="page-card" style="margin-top: 16px">
-      <template #header>系统日志</template>
-      <el-table :data="logs" border>
-        <el-table-column prop="deviceId" label="设备号" min-width="150" />
-        <el-table-column prop="commandBody" label="内容" min-width="220" />
-        <el-table-column prop="sentAt" label="时间" min-width="180" />
-      </el-table>
+      <template #header>
+        <div class="head">
+          <span>系统日志</span>
+          <el-button size="small" @click="handleLogTabChange(logActiveTab)">刷新</el-button>
+        </div>
+      </template>
+      <el-tabs v-model="logActiveTab" @tab-change="handleLogTabChange">
+        <el-tab-pane label="指令日志" name="command">
+          <el-table :data="logs" border>
+            <el-table-column prop="deviceId" label="设备号" min-width="150" />
+            <el-table-column prop="commandBody" label="内容" min-width="220" />
+            <el-table-column prop="sentAt" label="时间" min-width="180" />
+            <el-table-column prop="responseStatus" label="响应状态" min-width="120" />
+          </el-table>
+        </el-tab-pane>
+        <el-tab-pane label="操作日志" name="operation">
+          <el-table :data="operationLogs" border>
+            <el-table-column prop="operatorId" label="操作者ID" min-width="100" />
+            <el-table-column prop="action" label="动作" min-width="120" />
+            <el-table-column prop="resource" label="资源" min-width="160" />
+            <el-table-column prop="result" label="结果" min-width="100" />
+            <el-table-column prop="timestamp" label="时间" min-width="180" />
+          </el-table>
+        </el-tab-pane>
+        <el-tab-pane label="登录日志" name="login">
+          <el-table :data="loginLogs" border>
+            <el-table-column prop="userId" label="用户ID" min-width="100" />
+            <el-table-column prop="ip" label="IP地址" min-width="140" />
+            <el-table-column prop="location" label="地区" min-width="120" />
+            <el-table-column prop="status" label="状态" min-width="100" />
+            <el-table-column prop="loginTime" label="登录时间" min-width="180" />
+          </el-table>
+        </el-tab-pane>
+        <el-tab-pane label="通知日志" name="notification">
+          <el-table :data="notificationLogs" border>
+            <el-table-column prop="targetId" label="目标ID" min-width="100" />
+            <el-table-column prop="channel" label="通道" min-width="120" />
+            <el-table-column prop="payload" label="内容" min-width="200" show-overflow-tooltip />
+            <el-table-column prop="sentAt" label="发送时间" min-width="180" />
+            <el-table-column prop="result" label="结果" min-width="100" />
+          </el-table>
+        </el-tab-pane>
+      </el-tabs>
     </el-card>
 
   </div>

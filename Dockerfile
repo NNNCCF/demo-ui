@@ -18,8 +18,12 @@ RUN npx vite build
 
 # -------- Stage 2: nginx Serve + Reverse Proxy --------
 FROM ${FRONTEND_RUNTIME_IMAGE}
+# openssl is needed by the entrypoint to generate a self-signed fallback cert
+RUN apk add --no-cache openssl
 RUN rm /etc/nginx/conf.d/default.conf
 COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
 COPY --from=build /app/dist /usr/share/nginx/html
 
 EXPOSE 80
@@ -29,4 +33,5 @@ EXPOSE 443
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
     CMD wget -qO- http://127.0.0.1/nginx-health >/dev/null 2>&1 || exit 1
 
+ENTRYPOINT ["/docker-entrypoint.sh"]
 CMD ["nginx", "-g", "daemon off;"]

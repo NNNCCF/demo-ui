@@ -15,7 +15,7 @@ const router = createRouter({
       path: '/change-password',
       name: 'change-password',
       component: () => import('@/views/ChangePasswordView.vue'),
-      meta: { roles: ['ADMIN', 'GUARDIAN'] as UserRole[] },
+      meta: { public: true },
     },
     {
       path: '/',
@@ -83,10 +83,34 @@ const router = createRouter({
           meta: { roles: ['ADMIN'] as UserRole[] },
         },
         {
+          path: '/property-managements',
+          name: 'property-managements',
+          component: () => import('@/views/PropertyManagementView.vue'),
+          meta: { roles: ['ADMIN'] as UserRole[] },
+        },
+        {
+          path: '/call-records',
+          name: 'call-records',
+          component: () => import('@/views/CallRecordView.vue'),
+          meta: { roles: ['ADMIN'] as UserRole[] },
+        },
+        {
+          path: '/role-permissions',
+          name: 'role-permissions',
+          component: () => import('@/views/RolePermissionView.vue'),
+          meta: { roles: ['ADMIN'] as UserRole[] },
+        },
+        {
           path: '/families',
           name: 'families',
           component: () => import('@/views/FamilyView.vue'),
           meta: { roles: ['ADMIN', 'GUARDIAN'] as UserRole[] },
+        },
+        {
+          path: '/doctors',
+          name: 'doctors',
+          component: () => import('@/views/DoctorManagementView.vue'),
+          meta: { roles: ['ADMIN'] as UserRole[] },
         },
         {
           path: '/system',

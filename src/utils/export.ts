@@ -13,6 +13,7 @@ export function exportJsonToExcel(name: string, rows: Record<string, unknown>[])
   saveAs(new Blob([output], { type: 'application/octet-stream' }), `${name}_${now}.xlsx`)
 }
 
+/** @deprecated No callers in this project — remove when confirmed unused */
 export async function exportElementToPdf(name: string, element: HTMLElement) {
   const canvas = await html2canvas(element, { scale: 2 })
   const data = canvas.toDataURL('image/png')

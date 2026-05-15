@@ -59,10 +59,9 @@ interface DashboardAlarmItem extends Alarm {
 const mapPoints = ref<MapPoint[]>([])
 const alarmQueue = ref<DashboardAlarmItem[]>([])
 const activeAlarm = ref<DashboardAlarmItem | null>(null)
-const selectedAlarmResult = ref<'' | 'HANDLED' | 'IGNORED'>('')
 const isSubmittingAlarm = ref(false)
 const seenAlarmIds = ref<number[]>([])
-const DASHBOARD_POLL_INTERVAL_MS = 1000
+const DASHBOARD_POLL_INTERVAL_MS = 30000
 let devicePolling = false
 let alarmPolling = false
 let pollTimer: ReturnType<typeof setInterval> | null = null
@@ -177,7 +176,6 @@ function sortDashboardAlarms(items: DashboardAlarmItem[]) {
 
 function openNextDashboardAlarm() {
   activeAlarm.value = alarmQueue.value.shift() || null
-  selectedAlarmResult.value = ''
 }
 
 function enqueueDashboardAlarms(items: DashboardAlarmItem[]) {
@@ -199,13 +197,19 @@ async function loadSummary() {
     deviceApi.list(),
     fetchDashboardAlarms(1),
     fetchDashboardAlarms(365),
-    serviceOrderApi.list({ targetId: authStore.userInfo?.userId ?? undefined }).catch(() => []),
+    serviceOrderApi.list({ targetId: authStore.userInfo?.userId ?? undefined, page: 0, size: 200 }).catch(() => ({
+      content: [],
+      totalElements: 0,
+      totalPages: 0,
+      size: 200,
+      number: 0,
+    })),
   ])
 
   applyDeviceSummary(devices)
   updateAlarmSummary(recentAlarms)
-  summary.value.pendingOrders = orders.filter((order) => order.status === 'PENDING').length
-  summary.value.completedOrders = orders.filter((order) => order.status === 'COMPLETED').length
+  summary.value.pendingOrders = orders.content.filter((order) => order.status === 'PENDING').length
+  summary.value.completedOrders = orders.content.filter((order) => order.status === 'COMPLETED').length
 
   enqueueDashboardAlarms(
     sortDashboardAlarms(
@@ -251,7 +255,7 @@ async function refreshDeviceSummarySilently() {
 }
 
 async function submitDashboardAlarm() {
-  if (!activeAlarm.value || !selectedAlarmResult.value || isSubmittingAlarm.value) {
+  if (!activeAlarm.value || isSubmittingAlarm.value) {
     return
   }
 
@@ -261,13 +265,12 @@ async function submitDashboardAlarm() {
   try {
     await alarmApi.handle({
       alarmId: currentAlarm.id,
-      handleStatus: selectedAlarmResult.value,
+      handleStatus: 'IGNORED',
       handlerId: authStore.userInfo?.userId ?? 0,
-      handleRemark: selectedAlarmResult.value === 'HANDLED' ? '首页地图弹窗已处理' : '首页地图弹窗已忽略',
+      handleRemark: '首页地图一键确认忽略',
     })
-    ElMessage.success(selectedAlarmResult.value === 'HANDLED' ? '报警已标记为已处理' : '报警已标记为已忽略')
+    ElMessage.success('报警已一键确认')
     activeAlarm.value = null
-    selectedAlarmResult.value = ''
     await refreshAlarmSummarySilently()
     openNextDashboardAlarm()
   } catch {
@@ -376,14 +379,44 @@ function renderMapMarkers() {
   mapInstance.add(mapMarkers)
 }
 
-onMounted(async () => {
-  await loadSummary()
-  await initMap()
-  renderMapMarkers()
+function canPollDashboard() {
+  return document.visibilityState === 'visible' && document.hasFocus()
+}
+
+function startDashboardPolling() {
+  if (pollTimer || !canPollDashboard()) {
+    return
+  }
   pollTimer = setInterval(() => {
     void refreshDeviceSummarySilently()
     void refreshAlarmSummarySilently()
   }, DASHBOARD_POLL_INTERVAL_MS)
+}
+
+function stopDashboardPolling() {
+  if (pollTimer) {
+    clearInterval(pollTimer)
+    pollTimer = null
+  }
+}
+
+async function handleDashboardVisibilityChange() {
+  if (canPollDashboard()) {
+    await loadSummary()
+    startDashboardPolling()
+    return
+  }
+  stopDashboardPolling()
+}
+
+onMounted(async () => {
+  await loadSummary()
+  await initMap()
+  renderMapMarkers()
+  startDashboardPolling()
+  document.addEventListener('visibilitychange', handleDashboardVisibilityChange)
+  window.addEventListener('focus', handleDashboardVisibilityChange)
+  window.addEventListener('blur', stopDashboardPolling)
 })
 
 watch(mapPoints, () => {
@@ -391,10 +424,10 @@ watch(mapPoints, () => {
 })
 
 onUnmounted(() => {
-  if (pollTimer) {
-    clearInterval(pollTimer)
-    pollTimer = null
-  }
+  stopDashboardPolling()
+  document.removeEventListener('visibilitychange', handleDashboardVisibilityChange)
+  window.removeEventListener('focus', handleDashboardVisibilityChange)
+  window.removeEventListener('blur', stopDashboardPolling)
 })
 </script>
 
@@ -533,33 +566,13 @@ onUnmounted(() => {
           </div>
         </div>
 
-        <div class="alarm-result-label">处理结果</div>
-        <div class="alarm-result-options">
-          <button
-            type="button"
-            class="alarm-result-option"
-            :class="{ selected: selectedAlarmResult === 'HANDLED' }"
-            @click="selectedAlarmResult = 'HANDLED'"
-          >
-            已处理
-          </button>
-          <button
-            type="button"
-            class="alarm-result-option"
-            :class="{ selected: selectedAlarmResult === 'IGNORED' }"
-            @click="selectedAlarmResult = 'IGNORED'"
-          >
-            已忽略
-          </button>
-        </div>
-
         <button
           type="button"
           class="alarm-submit-btn"
-          :disabled="!selectedAlarmResult || isSubmittingAlarm"
+          :disabled="isSubmittingAlarm"
           @click="submitDashboardAlarm"
         >
-          {{ isSubmittingAlarm ? '提交中...' : '关闭' }}
+          {{ isSubmittingAlarm ? '确认中...' : '一键确认' }}
         </button>
       </div>
     </div>
@@ -710,45 +723,8 @@ onUnmounted(() => {
   line-height: 1.4;
 }
 
-.alarm-result-label {
-  margin-top: 20px;
-  font-size: 13px;
-  font-weight: 600;
-  color: #475569;
-}
-
-.alarm-result-options {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-  margin-top: 10px;
-}
-
-.alarm-result-option {
-  height: 44px;
-  border: 1px solid #fecaca;
-  border-radius: 14px;
-  background: #fff5f5;
-  color: #991b1b;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
-}
-
-.alarm-result-option:hover {
-  transform: translateY(-1px);
-}
-
-.alarm-result-option.selected {
-  border-color: #dc2626;
-  background: linear-gradient(135deg, #ef4444, #dc2626);
-  color: #ffffff;
-  box-shadow: 0 12px 30px rgba(220, 38, 38, 0.28);
-}
-
 .alarm-submit-btn {
-  margin-top: 18px;
+  margin-top: 22px;
   width: 100%;
   height: 48px;
   border: none;

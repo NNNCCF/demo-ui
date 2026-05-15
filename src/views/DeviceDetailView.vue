@@ -7,6 +7,13 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { dataApi, deviceApi } from '@/api/modules'
 import { deviceStatusLabelMap, deviceTypeLabelMap } from '@/constants/dicts'
 import type { Device, DeviceLog } from '@/types'
+import {
+  getDefaultZoomStart,
+  getFirstNumericMetricValue,
+  maxChartPointCount,
+  sampleRowsForChart,
+  type ChartMetricDefinition,
+} from '@/utils/chart-density'
 
 const route = useRoute()
 const router = useRouter()
@@ -22,6 +29,7 @@ const recentHistory = ref<Record<string, unknown>[]>([])
 const fullHistory = ref<Record<string, unknown>[]>([])
 const chartRef = ref<HTMLElement | null>(null)
 const chartKeys = ref<string[]>([])
+const selectedMetricIds = ref<string[]>(['heartRate', 'breathRate'])
 let chart: echarts.ECharts | null = null
 let refreshTimer: ReturnType<typeof setInterval> | null = null
 const autoRefreshIntervalMs = 15000
@@ -29,6 +37,23 @@ const autoRefreshIntervalMs = 15000
 const fullHistoryDialogVisible = ref(false)
 const activeMetric = ref('')
 const historySource = ref<'tdengine' | 'logs' | 'none'>('none')
+
+const CHART_METRICS: ChartMetricDefinition[] = [
+  {
+    id: 'heartRate',
+    label: '心率',
+    unit: 'bpm',
+    keys: ['heart_rate_per_min', 'heart_rate', 'heartRate'],
+    color: '#f59e0b',
+  },
+  {
+    id: 'breathRate',
+    label: '呼吸率',
+    unit: '次/分',
+    keys: ['breath_rate_per_min', 'breath_rate', 'breathRate'],
+    color: '#10b981',
+  },
+]
 
 const FIELD_LABEL_MAP: Record<string, string> = {
   device_id: '设备ID',
@@ -81,6 +106,25 @@ const metricRows = computed(() => {
       ts: formatTime(row.ts),
       value: stringifyValue(row[activeMetric.value]),
     }))
+})
+
+const availableChartMetrics = computed(() => {
+  return CHART_METRICS.filter((metric) => {
+    return recentHistory.value.some((row) => getFirstNumericMetricValue(row, metric) !== null)
+  })
+})
+
+const activeChartMetrics = computed(() => {
+  const availableIds = new Set(availableChartMetrics.value.map((metric) => metric.id))
+  return CHART_METRICS.filter((metric) => selectedMetricIds.value.includes(metric.id) && availableIds.has(metric.id))
+})
+
+const chartPointSummary = computed(() => {
+  const total = recentHistory.value.length
+  if (total <= maxChartPointCount) {
+    return total ? `共 ${total} 个点` : '暂无数据点'
+  }
+  return `共 ${total} 个点，图表抽样显示约 ${maxChartPointCount} 个点`
 })
 
 const historySourceText = computed(() => {
@@ -420,35 +464,13 @@ function buildHistoryFromLogs(maxRows = 300) {
   return rows.slice(rows.length - maxRows)
 }
 
-function resolveMetricKeys(rows: Record<string, unknown>[]) {
-  const whitelist = new Set([
-    'heart_rate_per_min',
-    'heart_rate',
-    'breath_rate_per_min',
-    'breath_rate',
-    'heartRate',
-    'breathRate',
-  ])
-  const keys = new Set<string>()
-  rows.forEach((row) => {
-    Object.entries(row).forEach(([key, value]) => {
-      if (!whitelist.has(key)) {
-        return
-      }
-      if (typeof value === 'number' || typeof value === 'boolean') {
-        keys.add(key)
-      }
-    })
-  })
-  return Array.from(keys)
-}
-
 function renderHistoryChart() {
   if (!chartRef.value) {
     return
   }
-  const keys = resolveMetricKeys(recentHistory.value)
-  chartKeys.value = keys
+  syncSelectedMetricsWithAvailable()
+  const metrics = activeChartMetrics.value
+  chartKeys.value = metrics.map((metric) => metric.keys[0] ?? metric.id)
 
   if (!chart) {
     chart = echarts.init(chartRef.value)
@@ -462,32 +484,65 @@ function renderHistoryChart() {
       }
     })
   }
-  const xAxis = recentHistory.value.map((row) => formatTime(row.ts))
-  const series = keys.map((key) => ({
-    name: FIELD_LABEL_MAP[key] || key,
-    originalKey: key,
+  const chartRows = sampleRowsForChart(recentHistory.value)
+  const zoomStart = getDefaultZoomStart(chartRows)
+  const xAxis = chartRows.map((row) => formatTime(row.ts))
+  const series = metrics.map((metric) => ({
+    name: `${metric.label}${metric.unit ? `（${metric.unit}）` : ''}`,
+    originalKey: metric.keys[0] ?? metric.id,
     type: 'line',
     smooth: true,
-    showSymbol: false,
-    data: recentHistory.value.map((row) => {
-      const value = row[key]
-      if (typeof value === 'boolean') {
-        return value ? 1 : 0
-      }
-      if (typeof value === 'number') {
-        return value
-      }
-      return null
-    }),
+    showSymbol: chartRows.length <= 80,
+    symbolSize: 5,
+    connectNulls: false,
+    sampling: 'lttb',
+    lineStyle: { width: 2 },
+    emphasis: { focus: 'series' },
+    itemStyle: { color: metric.color },
+    data: chartRows.map((row) => getFirstNumericMetricValue(row, metric)),
   }))
   chart.setOption({
-    tooltip: { trigger: 'axis' },
-    legend: { type: 'scroll', bottom: 0 },
-    grid: { left: 30, right: 20, top: 20, bottom: 40, containLabel: true },
-    xAxis: { type: 'category', data: xAxis, axisLabel: { show: false }, axisTick: { show: false } },
-    yAxis: { type: 'value' },
+    color: metrics.map((metric) => metric.color),
+    tooltip: {
+      trigger: 'axis',
+      confine: true,
+      axisPointer: { type: 'line' },
+    },
+    legend: { type: 'scroll', top: 0, right: 8 },
+    grid: { left: 36, right: 24, top: 42, bottom: 58, containLabel: true },
+    xAxis: {
+      type: 'category',
+      data: xAxis,
+      boundaryGap: false,
+      axisLabel: {
+        hideOverlap: true,
+        formatter: (value: string) => {
+          const parsed = dayjs(value)
+          return parsed.isValid() ? parsed.format('HH:mm') : value.slice(11, 16)
+        },
+      },
+      axisTick: { show: false },
+    },
+    yAxis: { type: 'value', scale: true, splitLine: { lineStyle: { type: 'dashed' } } },
+    dataZoom: [
+      { type: 'inside', start: zoomStart, end: 100, minSpan: 5 },
+      { type: 'slider', height: 22, bottom: 18, start: zoomStart, end: 100, brushSelect: false },
+    ],
     series,
-  })
+  }, true)
+}
+
+function syncSelectedMetricsWithAvailable() {
+  const availableIds = availableChartMetrics.value.map((metric) => metric.id)
+  selectedMetricIds.value = selectedMetricIds.value.filter((id) => availableIds.includes(id))
+  if (!selectedMetricIds.value.length && availableIds.length) {
+    selectedMetricIds.value = availableIds.slice(0, 2)
+  }
+}
+
+async function handleChartMetricChange() {
+  await nextTick()
+  renderHistoryChart()
 }
 
 async function loadDevice(silent = false) {
@@ -616,6 +671,12 @@ onMounted(async () => {
   if (!deviceId) {
     return
   }
+  const DEVICE_ID_RE = /^[A-Za-z0-9_-]{1,64}$/
+  if (!DEVICE_ID_RE.test(deviceId)) {
+    ElMessage.error(`设备ID格式不合法: ${deviceId}`)
+    router.replace('/devices')
+    return
+  }
   await refreshAll()
   refreshTimer = setInterval(() => {
     refreshSilently()
@@ -707,7 +768,23 @@ onUnmounted(() => {
         <div class="history-pane">
           <div class="history-chart">
             <div v-if="recentHistory.length && index === 0">
-              <div :ref="bindChartRef" class="chart" />
+              <div class="chart-toolbar">
+                <div class="chart-toolbar-main">
+                  <span class="chart-toolbar-title">趋势图</span>
+                  <span class="chart-toolbar-sub">{{ chartPointSummary }}</span>
+                </div>
+                <el-checkbox-group v-model="selectedMetricIds" size="small" @change="handleChartMetricChange">
+                  <el-checkbox-button
+                    v-for="metric in availableChartMetrics"
+                    :key="metric.id"
+                    :label="metric.id"
+                  >
+                    {{ metric.label }}
+                  </el-checkbox-button>
+                </el-checkbox-group>
+              </div>
+              <div v-if="activeChartMetrics.length" :ref="bindChartRef" class="chart" />
+              <el-empty v-else description="暂无可展示指标" />
             </div>
             <div v-else-if="recentHistory.length" class="chart-placeholder">同设备实时曲线</div>
             <el-empty v-else description="暂无历史数据" />
@@ -981,8 +1058,34 @@ onUnmounted(() => {
   border-radius: 6px;
 }
 
+.chart-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.chart-toolbar-main {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.chart-toolbar-title {
+  color: #0f172a;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.chart-toolbar-sub {
+  color: #94a3b8;
+  font-size: 12px;
+}
+
 .chart {
-  height: 260px;
+  height: 320px;
 }
 
 .close-bar {
@@ -1015,6 +1118,10 @@ onUnmounted(() => {
   }
   .summary-grid {
     grid-template-columns: 1fr;
+  }
+  .chart-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }
 </style>

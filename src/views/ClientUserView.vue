@@ -83,6 +83,7 @@ const getRoleTagType = (role: string) => {
 
 const isWardRole = computed(() => form.role === 'WARD')
 const isWardRow = (row: ClientUser) => row.sourceType === 'WARD' || row.role === 'WARD'
+const clientUserRowKey = (row: ClientUser) => `${row.sourceType || 'CLIENT_USER'}:${row.id}`
 
 const fetchData = async () => {
   loading.value = true
@@ -270,7 +271,7 @@ onMounted(() => {
     </div>
 
     <el-card class="page-card">
-    <el-table v-loading="loading" :data="tableData" style="width: 100%" border>
+    <el-table v-loading="loading" :data="tableData" :row-key="clientUserRowKey" style="width: 100%" border>
       <el-table-column prop="id" label="ID" width="90" />
       <el-table-column prop="name" label="姓名" min-width="120">
         <template #default="{ row }">

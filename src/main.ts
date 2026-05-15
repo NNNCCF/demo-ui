@@ -3,21 +3,13 @@ import ElementPlus from 'element-plus'
 import 'element-plus/dist/index.css'
 import App from './App.vue'
 import { createPinia } from 'pinia'
-import { createI18n } from 'vue-i18n'
 import router from '@/router'
-import { messages } from '@/locales'
 import './style.css'
-
-const i18n = createI18n({
-  legacy: false,
-  locale: localStorage.getItem('locale') || 'zh-CN',
-  fallbackLocale: 'zh-CN',
-  messages,
-})
+// TODO: i18n is configured (see src/locales/index.ts) but views use hardcoded Chinese.
+// Wire up $t() calls across views before enabling, or remove vue-i18n to reduce bundle size.
 
 const app = createApp(App)
 app.use(createPinia())
 app.use(router)
-app.use(i18n)
 app.use(ElementPlus)
 app.mount('#app')

@@ -1,4 +1,4 @@
-export type UserRole = 'ADMIN' | 'GUARDIAN'
+export type UserRole = 'ADMIN' | 'GUARDIAN' | 'DOCTOR' | 'NURSE' | 'CAREGIVER' | 'INSTITUTION'
 
 export type DeviceType = 'HEART_RATE' | 'FALL_DETECTOR' | 'LOCATOR' | 'HEALTH_MONITOR'
 export type DeviceStatus = 'ONLINE' | 'OFFLINE' | 'DISABLED'
@@ -8,7 +8,7 @@ export type AlarmHandleStatus = 'UNHANDLED' | 'HANDLED' | 'IGNORED'
 export type AlarmType = 'HEART_RATE' | 'BREATH_RATE' | 'FALL' | 'DEVICE_OFFLINE'
 
 export type ServiceOrderType = 'MEDICINE_DELIVERY' | 'HOME_VISIT' | 'PHYSICAL_EXAM'
-export type ServiceOrderStatus = 'PENDING' | 'ACCEPTED' | 'COMPLETED' | 'CANCELED'
+export type ServiceOrderStatus = 'PENDING' | 'DISPATCHED' | 'ACCEPTED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELED'
 
 export interface ApiResponse<T> {
   code: number
@@ -41,6 +41,16 @@ export interface RegisterPayload {
   phone?: string
   captchaToken: string
   captchaCode: string
+}
+
+export interface Doctor {
+  id: number
+  mobile: string
+  name: string
+  introduction?: string
+  title?: string
+  orgId: number
+  createdAt?: string
 }
 
 export interface AuthCaptcha {
@@ -125,6 +135,7 @@ export interface Alarm {
   handlerId?: number
   handleTime?: string
   handleRemark?: string
+  currentValue?: string
 }
 
 export interface MonthlyDeviceStat {
@@ -237,5 +248,48 @@ export interface FeedbackItem {
   content: string
   status: string
   createdAt: string
+  updatedAt?: string
+}
+
+export interface PageResult<T> {
+  content: T[]
+  totalElements: number
+  totalPages: number
+  size: number
+  number: number
+}
+
+export interface PaymentRecord {
+  id: number
+  orderId: number
+  amount: number
+  channel: 'MOCK'
+  status: 'UNPAID' | 'PAID' | 'FAILED' | 'CANCELED'
+  tradeNo?: string
+  createdAt?: string
+  updatedAt?: string
+  paidAt?: string
+}
+
+export interface PropertyManagement {
+  id: number
+  name: string
+  contactName?: string
+  contactPhone?: string
+  serviceArea?: string
+  address?: string
+  remark?: string
+  createdAt?: string
+  updatedAt?: string
+}
+
+export interface CallRecord {
+  id: number
+  callerName: string
+  phone: string
+  content?: string
+  handlerName?: string
+  durationSeconds?: number
+  createdAt?: string
   updatedAt?: string
 }

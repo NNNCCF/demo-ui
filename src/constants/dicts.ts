@@ -10,50 +10,56 @@ import type {
 } from '@/types'
 
 export const roleLabelMap: Record<UserRole, string> = {
-  ADMIN: '超级管理员',
-  GUARDIAN: '普通操作员',
+  ADMIN: 'Admin',
+  GUARDIAN: 'Guardian',
+  DOCTOR: 'Doctor',
+  NURSE: 'Nurse',
+  CAREGIVER: 'Caregiver',
+  INSTITUTION: 'Institution',
 }
 
 export const deviceTypeLabelMap: Record<DeviceType, string> = {
-  HEART_RATE: '心率仪',
-  FALL_DETECTOR: '跌倒检测器',
-  LOCATOR: '定位器',
-  HEALTH_MONITOR: '健康监测仪',
+  HEART_RATE: 'Heart rate',
+  FALL_DETECTOR: 'Fall detector',
+  LOCATOR: 'Locator',
+  HEALTH_MONITOR: 'Health monitor',
 }
 
 export const deviceStatusLabelMap: Record<DeviceStatus, string> = {
-  ONLINE: '在线',
-  OFFLINE: '离线',
-  DISABLED: '禁用',
+  ONLINE: 'Online',
+  OFFLINE: 'Offline',
+  DISABLED: 'Disabled',
 }
 
 export const alarmTypeLabelMap: Record<AlarmType, string> = {
-  HEART_RATE: '心率异常',
-  BREATH_RATE: '呼吸率异常',
-  FALL: '跌倒',
-  DEVICE_OFFLINE: '设备离线',
+  HEART_RATE: 'Heart rate',
+  BREATH_RATE: 'Breath rate',
+  FALL: 'Fall',
+  DEVICE_OFFLINE: 'Device offline',
 }
 
 export const alarmLevelLabelMap: Record<AlarmLevel, string> = {
-  NORMAL: '一般',
-  EMERGENCY: '紧急',
+  NORMAL: 'Normal',
+  EMERGENCY: 'Emergency',
 }
 
 export const alarmStatusLabelMap: Record<AlarmHandleStatus, string> = {
-  UNHANDLED: '未处理',
-  HANDLED: '已处理',
-  IGNORED: '已忽略',
+  UNHANDLED: 'Unhandled',
+  HANDLED: 'Handled',
+  IGNORED: 'Ignored',
 }
 
 export const serviceTypeLabelMap: Record<ServiceOrderType, string> = {
-  MEDICINE_DELIVERY: '送药',
-  HOME_VISIT: '家访',
-  PHYSICAL_EXAM: '体检',
+  MEDICINE_DELIVERY: 'Medicine delivery',
+  HOME_VISIT: 'Home visit',
+  PHYSICAL_EXAM: 'Physical exam',
 }
 
 export const serviceStatusLabelMap: Record<ServiceOrderStatus, string> = {
-  PENDING: '待处理',
-  ACCEPTED: '已派单',
-  COMPLETED: '已完成',
-  CANCELED: '已取消',
+  PENDING: 'Pending',
+  DISPATCHED: 'Dispatched',
+  ACCEPTED: 'Accepted',
+  IN_PROGRESS: 'In service',
+  COMPLETED: 'Completed',
+  CANCELED: 'Canceled',
 }

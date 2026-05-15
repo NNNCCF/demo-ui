@@ -1,6 +1,5 @@
-import axios from 'axios'
-import { del, get, patch, post, put } from '@/api/http'
-import { useAuthStore } from '@/stores/auth'
+import { del, get, http, patch, post, put } from '@/api/http'
+import { saveAs } from 'file-saver'
 import type {
   Alarm,
   AlarmHandleStatus,
@@ -13,6 +12,7 @@ import type {
   DeviceLog,
   DeviceProvisioningResult,
   DeviceType,
+  Doctor,
   AuthCaptcha,
   FeedbackItem,
   HeartRateTrendPoint,
@@ -22,6 +22,10 @@ import type {
   NewsPost,
   RegisterPayload,
   NurseItem,
+  PageResult,
+  PaymentRecord,
+  PropertyManagement,
+  CallRecord,
   ServiceOrder,
   ServiceOrderType,
   UserProfile,
@@ -101,8 +105,8 @@ export const alarmApi = {
     patch<void>(`/alarms/${payload.alarmId}/handle`, payload),
   handleAll: (handlerId: number) =>
     post<number>('/alarms/handle-all', null, { params: { handlerId } }),
-  clearAll: () =>
-    del<void>('/alarms'),
+  clearAll: (guardianId?: number) =>
+    del<void>('/alarms', guardianId !== undefined ? { params: { guardianId } } : undefined),
   getRules: () =>
     get<Record<AlarmType, {
       id: number
@@ -122,7 +126,11 @@ export const alarmApi = {
     alarmLevel?: AlarmLevel
   }) => patch<void>('/alarms/rules', payload),
   export: (params: { startTime: string; endTime: string }) =>
-    get<Blob>('/alarms/export', { params, responseType: 'blob' }),
+    http.get<Blob>('/alarms/export', { params, responseType: 'blob' }).then((response) => {
+      const disposition = response.headers['content-disposition']
+      const match = typeof disposition === 'string' ? disposition.match(/filename="?([^"]+)"?/) : null
+      saveAs(response.data, match?.[1] || 'alarms.xlsx')
+    }),
 }
 
 export const statsApi = {
@@ -134,8 +142,8 @@ export const statsApi = {
 // Note: /stats/* is accessible to ADMIN and GUARDIAN roles
 
 export const serviceOrderApi = {
-  list: (params: { targetId?: number; orgId?: number; status?: string; orderType?: ServiceOrderType; keyword?: string }) =>
-    get<ServiceOrder[]>('/service-orders', { params }),
+  list: (params: { targetId?: number; orgId?: number; status?: string; orderType?: ServiceOrderType; keyword?: string; page?: number; size?: number }) =>
+    get<PageResult<ServiceOrder>>('/service-orders', { params }),
   detail: (id: number) => get<ServiceOrder>(`/service-orders/${id}`),
   create: (payload: {
     orderType: ServiceOrderType
@@ -197,20 +205,28 @@ export const serviceOrderApi = {
     get<NurseItem[]>('/service-orders/nurses', { params: orgId ? { orgId } : {} }),
 }
 
+export const paymentApi = {
+  create: (payload: { orderId: number; amount: string; channel: 'MOCK' }) =>
+    post<PaymentRecord>('/payments/create', payload),
+  detail: (id: number) => get<PaymentRecord>(`/payments/${id}`),
+  mockCallback: (id: number, payload: { status: 'PAID' | 'FAILED'; tradeNo?: string }) =>
+    post<PaymentRecord>(`/payments/${id}/mock-callback`, payload),
+}
+
 export const logApi = {
   operationLogs: (startTime: string, endTime: string) =>
     get<{ operatorId: number; action: string; resource: string; result: string; timestamp: string }[]>(
-      '/admin/logs/operation',
+      '/admin/logs/operations',
       { params: { startTime, endTime } },
     ),
   loginLogs: (startTime: string, endTime: string) =>
     get<{ userId: number; ip: string; location: string; status: string; loginTime: string }[]>(
-      '/admin/logs/login',
+      '/admin/logs/logins',
       { params: { startTime, endTime } },
     ),
   notificationLogs: (startTime: string, endTime: string) =>
     get<{ targetId: number; channel: string; payload: string; sentAt: string; result: string }[]>(
-      '/admin/logs/notification',
+      '/admin/logs/notifications',
       { params: { startTime, endTime } },
     ),
 }
@@ -270,12 +286,7 @@ export const adminApi = {
     ),
   systemConfig: () => get<Record<string, string>>('/admin/system/config'),
   saveSystemConfig: (params: Record<string, string>) => put<void>('/admin/system/config', params),
-  systemStatus: () => {
-    const authStore = useAuthStore()
-    return axios.get<{ code: number; data: any }>('/api/admin/system/status', {
-      headers: authStore.token ? { Authorization: `Bearer ${authStore.token}` } : {},
-    }).then(r => r.data.data)
-  },
+  systemStatus: () => get<any>('/admin/system/status'),
 }
 
 export const feedbackAdminApi = {
@@ -374,4 +385,41 @@ export const caregiverApi = {
 
 export const wardApi = {
   list: () => get<{ memberId: number; name: string }[]>('/wards'),
+}
+
+export const propertyManagementApi = {
+  list: (params?: { keyword?: string }) =>
+    get<PropertyManagement[]>('/admin/property-managements', { params }),
+  create: (payload: Omit<PropertyManagement, 'id' | 'createdAt' | 'updatedAt'>) =>
+    post<PropertyManagement>('/admin/property-managements', payload),
+  update: (id: number, payload: Omit<PropertyManagement, 'id' | 'createdAt' | 'updatedAt'>) =>
+    put<PropertyManagement>(`/admin/property-managements/${id}`, payload),
+  delete: (id: number) => del<void>(`/admin/property-managements/${id}`),
+}
+
+export const callRecordApi = {
+  list: (params?: { keyword?: string }) =>
+    get<CallRecord[]>('/admin/call-records', { params }),
+  create: (payload: Omit<CallRecord, 'id' | 'createdAt' | 'updatedAt'>) =>
+    post<CallRecord>('/admin/call-records', payload),
+  update: (id: number, payload: Omit<CallRecord, 'id' | 'createdAt' | 'updatedAt'>) =>
+    put<CallRecord>(`/admin/call-records/${id}`, payload),
+  delete: (id: number) => del<void>(`/admin/call-records/${id}`),
+}
+
+export const doctorApi = {
+  list: (orgId?: number) =>
+    get<Doctor[]>('/doctors', orgId !== undefined ? { params: { orgId } } : undefined),
+  get: (id: number) => get<Doctor>(`/doctors/${id}`),
+  create: (payload: { mobile: string; name: string; password: string; introduction?: string; title?: string; orgId: number }) =>
+    post<Doctor>('/doctors', payload),
+  update: (id: number, payload: { mobile: string; name: string; introduction?: string; title?: string; orgId: number }) =>
+    put<Doctor>(`/doctors/${id}`, payload),
+  delete: (id: number) => del<void>(`/doctors/${id}`),
+}
+
+export const rolePermissionApi = {
+  get: () => get<Record<UserProfile['role'], string[]>>('/admin/role-permissions'),
+  update: (role: string, routes: string[]) =>
+    patch<Record<string, string[]>>(`/admin/role-permissions/${role}`, { routes }),
 }

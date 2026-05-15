@@ -48,13 +48,20 @@ http.interceptors.response.use(
 )
 
 async function request<T>(config: AxiosRequestConfig): Promise<T> {
-  const response = await http.request<ApiResponse<T>>(config)
+  const response = await http.request<ApiResponse<T> | T>(config)
+  if (config.responseType === 'blob' || config.responseType === 'arraybuffer') {
+    return response.data as T
+  }
   const payload = response.data
-  if (payload.code !== 0) {
+  if (!payload || typeof payload !== 'object' || !('code' in payload)) {
+    return payload as T
+  }
+  const apiPayload = payload as ApiResponse<T>
+  if (apiPayload.code !== 0) {
     ElMessage.error(payload.message || '请求失败')
     throw new Error(payload.message || '请求失败')
   }
-  return payload.data
+  return apiPayload.data
 }
 
 export function get<T>(url: string, config?: AxiosRequestConfig) {
@@ -76,3 +83,5 @@ export function put<T>(url: string, data?: unknown, config?: AxiosRequestConfig)
 export function del<T>(url: string, config?: AxiosRequestConfig) {
   return request<T>({ ...config, method: 'DELETE', url })
 }
+
+export { http }

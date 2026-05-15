@@ -14,7 +14,7 @@ const userDialogVisible = ref(false)
 const assignCaregiverVisible = ref(false)
 const expandedOrgId = ref<number | null>(null)
 
-const form = reactive({ name: '', type: 'MEDICAL_INSTITUTION', region: '', contactPhone: '' })
+const form = reactive({ name: '', type: 'MEDICAL_INSTITUTION', region: '', contactPhone: '', legalPersonName: '', legalPersonPhone: '' })
 const userForm = reactive({ name: '', password: '', phone: '', orgId: 0 })
 const assignForm = reactive({ caregiverId: null as number | null, orgId: 0 })
 const assignLoading = ref(false)
@@ -60,13 +60,13 @@ function toggleExpand(orgId: number) {
 
 function openCreate() {
   editingId.value = null
-  Object.assign(form, { name: '', type: 'MEDICAL_INSTITUTION', region: '', contactPhone: '' })
+  Object.assign(form, { name: '', type: 'MEDICAL_INSTITUTION', region: '', contactPhone: '', legalPersonName: '', legalPersonPhone: '' })
   dialogVisible.value = true
 }
 
 function openEdit(row: any) {
   editingId.value = row.id
-  Object.assign(form, { name: row.name, type: row.type, region: row.region ?? '', contactPhone: row.contactPhone ?? '' })
+  Object.assign(form, { name: row.name, type: row.type, region: row.region ?? '', contactPhone: row.contactPhone ?? '', legalPersonName: row.legalPersonName ?? '', legalPersonPhone: row.legalPersonPhone ?? '' })
   dialogVisible.value = true
 }
 
@@ -168,6 +168,8 @@ onMounted(loadOrgs)
         </el-table-column>
         <el-table-column prop="region" label="区域" />
         <el-table-column prop="contactPhone" label="联系电话" />
+        <el-table-column prop="legalPersonName" label="法人姓名" />
+        <el-table-column prop="legalPersonPhone" label="法人电话" />
         <el-table-column prop="status" label="状态" width="90">
           <template #default="{ row }">
             <el-tag :type="row.status === 'ENABLED' ? 'success' : 'danger'">
@@ -273,6 +275,8 @@ onMounted(loadOrgs)
         </el-form-item>
         <el-form-item label="区域"><el-input v-model="form.region" /></el-form-item>
         <el-form-item label="联系电话"><el-input v-model="form.contactPhone" /></el-form-item>
+        <el-form-item label="法人姓名"><el-input v-model="form.legalPersonName" /></el-form-item>
+        <el-form-item label="法人电话"><el-input v-model="form.legalPersonPhone" /></el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
